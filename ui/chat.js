@@ -4,14 +4,46 @@
 var chatEl = {},
 	timeBefore;
 
-$(function () {
-	var $template = $(".chat-item").eq(0);
+$(function() {
+	var $template = $(".chat-item").eq(0),
+		replaceAll = function(str, find, replace) {
+			var ret = '',
+				txt = str,
+				i = 0, j = -1;
 
-	chatEl.render = function ($el, text) {
+			while ((j = txt.indexOf(find)) > -1) {
+				ret += str.substring(i, i + j) + replace;
+				txt = txt.substring(j + find.length, txt.length);
+				i += j + find.length;
+			}
+
+			if (txt.length > 0) {
+				ret += str.substring(str.length - txt.length, str.length);
+			}
+
+			return ret;
+		};
+
+	chatEl.render = function($el, text) {
+		var string = "",
+			links;
+
 		$el = $el || $template.clone(false);
 
+		string = format.textToHtml(text.text);
+
+		if (text.text) {
+			links = format.linkify(text.text);
+
+			for (var link in links) {
+				if (links.hasOwnProperty(link)) {
+					string = replaceAll(string, format.textToHtml(link), links[link]);
+				}
+			}
+		}
+
 		$el.find(".chat-nick").text(text.from.replace(/^guest-/, ""));
-		$el.find(".chat-message").html(format.linkify(format.textToHtml(text.text || "")));
+		$el.find(".chat-message").html(string || "");
 		$el.find(".chat-timestamp").text(format.friendlyTime(text.time, new Date().getTime()));
 		$el.attr("data-index", text.time);
 		$el.attr("id", "chat-" + text.id);
@@ -52,7 +84,7 @@ $(function () {
 			charsPerLine = width / (parseInt($container.css("font-size"), 10) * 0.6);
 
 			lines.forEach(function(line) {
-				lineCount += Math.ceil(line.length/charsPerLine);
+				lineCount += Math.ceil(line.length / charsPerLine);
 			});
 
 			if (lineCount > 4) {
