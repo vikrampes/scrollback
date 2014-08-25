@@ -1,0 +1,54 @@
+body { font-family: @font-family; }
+
+.meta-tabs {
+	background-color: @title-bg;
+	color: @title-fg;
+	border-bottom-color: darken(@title-bg, 3%);
+
+	.tab {
+		fill: fade(@title-fg, 70%);
+		border-left-color: darken(@title-bg, 3%);
+
+		&:hover, &:focus, &:active {
+			fill: fade(@title-fg, 85%);
+			background-color: darken(@title-bg, 5%);
+		}
+
+		&.current {
+			fill: fade(@title-fg, 85%);
+			background-color: rgba(0,0,0,.15);
+		}
+	}
+
+	.meta-header {
+		@media only screen and (min-width: 70em) { background-image: url(../../img/client/icons/settings-dark.svg); }
+	}
+}
+
+.title-bar, .minimize-bar {
+	background-color: @title-bg;
+	color: @title-fg;
+	box-shadow: inset 0 -1px 0 0 darken(@title-bg, 2%),
+		-1px 0 0 darken(@title-bg, 2%),
+		0 3px 2px -1px rgba(0,0,0,.05);
+}
+
+.follow-button {
+	fill: none;
+	stroke: fade(@title-fg, 85%);
+
+	&:focus, &:hover, &:active {
+		fill: none;
+		stroke: @title-fg;
+	}
+}
+
+&.role-follower .follow-button, .meta-tabs li.rooms-button, .meta-button, .search-button, .embed-button {
+	fill: fade(@title-fg, 85%);
+
+	&:focus, &:hover, &:active { fill: @title-fg; }
+}
+
+.sb-icon-top { fill: @title-fg; }
+
+.sb-icon-bottom { fill: @title-fg; }

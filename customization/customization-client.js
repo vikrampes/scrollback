@@ -1,44 +1,48 @@
 /* jshint browser: true */
 /* global $, libsb */
 
-//var formField = require("../lib/formField.js");
+var formField = require("../lib/formField.js");
 
 $(function() {
-//	libsb.on("config-show", function(tabs, next) {
-//		var results = tabs.room;
-//
-//		if (!results.guides) {
-//			results.guides = {};
-//		}
-//
-//		if (!results.guides.customization) {
-//			results.guides.customization = {};
-//		}
-//
-//		if (!results.guides.customization.css) {
-//			results.guides.customization.css = "";
-//		}
-//
-//		var $div = $("<div>").append(formField("Custom CSS", "area", "custom-css", results.guides.customization.css));
-//
-//		tabs.customization = {
-//			text: "Customization",
-//			html: $div,
-//			prio: 300
-//		};
-//
-//		next();
-//	}, 500);
-//
-//	libsb.on("config-save", function(room, next){
-//		if (!room.guides.customization) {
-//			room.guides.customization = {};
-//		}
-//
-//		room.guides.customization.css = $("#custom-css").val().replace("<", "\\3c").replace(">", "\\3e");
-//
-//		next();
-//	}, 500);
+	libsb.on("config-show", function(tabs, next) {
+		var results = tabs.room,
+			options;
+
+		results.guides = results.guides || {};
+
+		results.guides.customization = results.guides.customization || {};
+
+		options = results.guides.customization.options || {};
+
+		var $fontFamily = formField("Font family", "text", "customization-font-family", options["font-family"]),
+			$titleBg = formField("Titlebar background", "text", "customization-title-bg", options["title-bg"]),
+			$titleFg = formField("Titlebar text", "text", "customization-title-fg", options["title-fg"]),
+			$divs = $("<div>").append(
+				$fontFamily,
+				$titleBg,
+				$titleFg
+			);
+
+		tabs.customization = {
+			text: "Customization",
+			html: $divs,
+			prio: 300
+		};
+
+		next();
+	}, 500);
+
+	libsb.on("config-save", function(room, next) {
+		room.guides.customization = room.guides.customization || {};
+
+		room.guides.customization.options = {
+			"font-family": $("#customization-font-family").val(),
+			"title-bg": $("#customization-title-bg").val(),
+			"title-fg": $("#customization-title-fg").val()
+		};
+
+		next();
+	}, 500);
 
 	libsb.on("navigate", function(state, next) {
 		if (state.old && state.room !== state.old.room) {

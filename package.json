@@ -68,8 +68,7 @@
   },
   "optionalDependencies": {},
   "devDependencies": {
-    "blanket": "^1.1.6",
-    "selenium-webdriver": "^2.42.1",
+    "blanket": "latest",
     "bower": "latest",
     "browserify": "latest",
     "event-stream": "latest",
@@ -88,9 +87,11 @@
     "gulp-uglify": "latest",
     "gulp-util": "latest",
     "jshint-stylish": "latest",
+    "less": "latest",
     "main-bower-files": "latest",
     "mocha": "latest",
+    "selenium-webdriver": "latest",
     "vinyl-source-stream": "latest",
-    "xunit-file": "0.0.5"
+    "xunit-file": "latest"
   }
 }

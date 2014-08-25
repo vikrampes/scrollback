@@ -6,7 +6,7 @@ module.exports = function(core) {
 			compress: true,
 			yuicompress: true
 		}),
-		lessBase = fs.readFileSync(__dirname + "/customization.template", "utf8"),
+		lessBase = fs.readFileSync(__dirname + "/customization.less", "utf8"),
 		genCss = function(action, next) {
 			var room = action.room,
 				lessVars = "",
@@ -34,15 +34,15 @@ module.exports = function(core) {
 
 				if (error) {
 					less.writeError(error);
-					return;
+					return next();
 				}
 
 				css = cssTree.toCSS();
 
 				room.guides.customization.css = (css) ? css.replace("<", "\\3c").replace(">", "\\3e") : "";
-			});
 
-			next();
+				next();
+			});
 		};
 
 	core.on("room", genCss, "modifier");
