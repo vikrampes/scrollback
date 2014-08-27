@@ -3,13 +3,15 @@
 /* exported currentState */
 
 var currentState = window.currentState = {},
-	libsb; // think of a way to remove this from window.(if need)
-module.exports = function (l) {
+	libsb, // think of a way to remove this from window.(if need)
+	states = [ "roomName", "room", "view", "theme", "embed", "minimize", "mode", "tab", "thread", "query", "text", "time", "roomStatus", "connectionStatus" ];
+
+module.exports = function(l) {
 	libsb = l;
 	libsb.on("navigate", loadOld, 999);
 	libsb.on("navigate", saveCurrentState, 700);
 
-	libsb.on('room-dn', function (room, next) {
+	libsb.on("room-dn", function(room, next) {
 		if (room.room.id === currentState.roomName) {
 			currentState.room = room.room;
 		}
@@ -22,13 +24,15 @@ function loadOld(state, next) {
 	state.old = $.extend(true, {}, currentState); // copying object by value
 	state.changes = {};
 
-    ["roomName", "room", "view", "theme", "embed", "minimize", "mode", "tab", "thread", "query", "text", "time", "roomStatus", "connectionStatus"].forEach(function (prop) {
+    states.forEach(function(prop) {
 		if (typeof state[prop] === "undefined") {
 			if (typeof state.old[prop] !== "undefined") {
 				state[prop] = state.old[prop];
 			}
+
 			return;
 		}
+
 		if (state[prop] != state.old[prop]) {
 			state.changes[prop] = state[prop];
 		}
@@ -38,11 +42,12 @@ function loadOld(state, next) {
 }
 
 function saveCurrentState(state, next) {
-    ["roomName", "room", "view", "theme", "embed", "minimize", "mode", "tab", "thread", "query", "text", "time", "roomStatus", "connectionStatus"].forEach(function (prop) {
+    states.forEach(function(prop) {
 		if (typeof state[prop] === "undefined") {
 			if (typeof state.old[prop] !== "undefined") {
 				currentState[prop] = state.old[prop];
 			}
+
 			return;
 		}
 
@@ -52,5 +57,6 @@ function saveCurrentState(state, next) {
 			currentState[prop] = state[prop];
 		}
 	});
+
 	next();
 }

@@ -2,15 +2,16 @@
 /* global $, window*/
 /* exported currentState */
 
-var currentState = window.currentState;
-var libsb;
-module.exports = function (l) {
+var currentState = window.currentState,
+	libsb;
+
+module.exports = function(l) {
 	libsb = l;
 	// On navigation, add history and change URLs and title
 	libsb.on("navigate", updateHistory, 200);
 
 	// On history change, load the appropriate state
-	$(window).on("popstate", function () {
+	$(window).on("popstate", function() {
 		if (("state" in history && history.state !== null)) {
 			var state = {},
 				prop;
