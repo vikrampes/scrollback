@@ -13,12 +13,8 @@
     "bower_components"
   ],
   "dependencies": {
-    "flexie": "~1.0.3",
-    "jquery": "1",
-    "lace": "*",
-    "sockjs": "~0.3.4",
-    "svg4everybody": "*",
-    "transformie": "*",
-    "velocity": "~0.7.0"
+    "lace": "0.1.20",
+    "endless": "*",
+    "jquery": "~2.1.3"
   }
 }

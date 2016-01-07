@@ -18,57 +18,92 @@ or write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330,
 Boston, MA 02111-1307 USA.
 */
 
-var config = require('../config.js'), core,
-	fs = require("fs"),core, clientHTML;
-var clientSubstrings = [];
-var seo;
-//var log = require('../lib/logger.js');
-exports.init = function(app, coreObject) {
-	core = coreObject;
-    if (!config.http.https) console.warn("Insecure connection. Specify https options in your config file.");
-    init();
-	app.get('/t/*', function(req, res, next) {
-		fs.readFile(__dirname + "/../public/s/preview.html", "utf8", function(err, data){
+"use strict";
+
+var core, config,
+	fs = require("fs"),
+	handlebars = require("handlebars"),
+	clientConfig = require("../client-config-defaults.js"),
+	clientTemplate = handlebars.compile(fs.readFileSync(__dirname + "/../public/app.hbs", "utf8")),
+	log = require("../lib/logger.js"),
+	seo, handleRequestInfo;
+
+function start() {
+	seo = require("./seo.js")(core, config);
+	handleRequestInfo = require("./handle-request-info.js")(core, config);
+}
+
+function init(app) {
+	if (!config.https) {
+		log.w("Insecure connection. Specify https options in your config file.");
+	}
+
+	start();
+
+	app.get("/t/*", function(req, res, next) {
+		fs.readFile(__dirname + "/../public/s/preview.html", "utf8", function(err, data) {
 			res.end(data);
+
 			next();
 		});
 	});
-    
-	app.get("/s/offline.html", function(req, res, next) {
-		res.end(clientHTML);
-	});
-	
-	app.get("/*", function(req, res, next){
-		if(/^\/t\//.test(req.path)) return next();
-		if(/^\/s\//.test(req.path)) {console.log("static"); return next();}
 
-		if(!req.secure && config.http.https) {
-			var queryString  = req._parsedUrl.search ? req._parsedUrl.search : "";
-			return res.redirect(307, 'https://' + config.http.host + req.path + queryString);
+	app.get("/", function(req, res) {
+		res.redirect(307, config.index);
+	});
+
+	app.get("/*", function(req, res, next) {
+		if (/^\/t\//.test(req.path) || /^\/s\//.test(req.path) || /^\/favicon\.ico$/.test(req.path)) {
+			return next();
 		}
-		
-        seo.getSEOHtml(req, function(r) {
-            var d = [];
-            d.push(clientSubstrings[0]) ;
-            d.push(r.head);
-            d.push(clientSubstrings[1]);
-            d.push(r.body);
-            d.push(clientSubstrings[2]);
-            res.end(d.join("\n"));
-        });
 
-		
+		if(/^\/r\//.test(req.path)) return next();
+		if (/^\/i\//.test(req.path)) {
+			try {
+				handleRequestInfo(req, function(err, data) {
+					if (err || !data) {
+						log.i("Error retriving info for", req.path, err);
+
+						res.send(404);
+
+						return;
+					}
+
+					if (data.type === "url" && data.url) {
+						res.redirect(302, data.url);
+					} else if (data.type === "json" && data.json) {
+						res.setHeader("Content-Type", "application/json");
+						res.end(data.json);
+					} else {
+						log.e("Got invalid data for", req.path, ":", data, err);
+
+						res.send(404);
+					}
+				});
+			} catch(err) {
+				log.e("Error handling query for", req.path, err);
+
+				res.send(404);
+			}
+
+			return null;
+		}
+
+		if (!req.secure && config.https) {
+			return res.redirect(301, "https://" + req.get("host") + req.originalUrl);
+		}
+
+		seo.getSEO(req, function(r) {
+			clientConfig.seo = r;
+
+			res.end(clientTemplate(clientConfig));
+		});
 	});
-};
-
-function init() {
-    clientHTML = fs.readFileSync(__dirname + "/../public/client.html", "utf8");
-    seo = require('./seo.js')(core); 
-    var idhs = "<!-- gen Head Start -->";
-    var idbs = "<!-- Messages start here. -->";
-    var index1 = clientHTML.indexOf(idhs);
-    var index2 = clientHTML.indexOf(idbs);
-    clientSubstrings.push(clientHTML.substring(0, index1 + idhs.length));
-    clientSubstrings.push(clientHTML.substring(index1 + idhs.length, index2 + idbs.length));
-    clientSubstrings.push(clientHTML.substring(index2 + idbs.length));
 }
+
+module.exports = function(c, conf) {
+	core = c;
+	config = conf;
+
+	return { init: init };
+};

@@ -1,10 +1,11 @@
 var gen = require("../lib/generate.js");
 var guid = gen.uid;
 var log = require("../lib/logger.js");
+var config;
 
-module.exports = function(clientEmitter, client, callbacks) {
-
-	function connectUser(roomId, user) {
+module.exports = function(conf, clientEmitter, client, callbacks) {
+	config = conf;
+	function connectUser(roomId, user, origin) {
 		var uid = guid();
 		console.log("connecting user:", user, uid);
 		clientEmitter.emit('write', {
@@ -12,7 +13,12 @@ module.exports = function(clientEmitter, client, callbacks) {
 			type: "connectUser",
 			roomId: roomId,
 			nick: user,
-			options: {identId: user + "@scrollback.io"}
+			options: {
+				identId: user + "@scrollback.io", 
+				userIp: origin.client, 
+				userHostName: origin.client,
+				userName: user
+			}
 		});
 	}
 
@@ -154,6 +160,18 @@ module.exports = function(clientEmitter, client, callbacks) {
 			(/^web/).test(action.session) && client.connected() && rp.irc.enabled && !rp.irc.error);	
 	}
 	
+	function ircfyText(message) {
+		var l = 400 - message.room.params.irc.channel.length;
+		if (message.text.length <= l) {
+			return message.text;
+		} else {
+			var suffix = "... [ full message at http://" + config.global.host + "/" + message.to + "?time=" + 
+				new Date(message.time).toISOString() + "&tab=people" + " ]";	
+			var r = message.text.substring(0, l - suffix.length) + suffix;
+			return r;
+		}
+	}
+	
 	return {
 		connectUser: connectUser,
 		say: say,
@@ -164,6 +182,7 @@ module.exports = function(clientEmitter, client, callbacks) {
 		getBotNick: getBotNick,
 		getRequest: getRequest,
 		channelLowerCase: channelLowerCase,
-		isActionReq: isActionReq
+		isActionReq: isActionReq,
+		ircfyText: ircfyText
 	};
 };

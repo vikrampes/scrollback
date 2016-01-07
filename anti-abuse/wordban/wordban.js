@@ -1,109 +1,128 @@
-var log = require("../../lib/logger.js"),
-    SbError = require("../../lib/SbError.js"),
-	fs = require("fs"),
-	blockWords={},
-	longest = 0;
+/* eslint complexity: 0*/
 
-log("Checking");
+"use strict";
+var SbError = require("../../lib/SbError.js"),
+	log = require("../../lib/logger.js"),
+	regReplace = require("../../lib/regex-utils.js"),
+	fs = require("fs"),
+	filters = {};
+
+fs.readdirSync(__dirname + "/badwords").forEach(function(filename) {
+	if (filename === "en" || filename === "hi") {
+		filters[filename] = new RegExp("\\b" + fs.readFileSync(
+			__dirname + "/badwords/" + filename
+		).toString("utf-8").trim().toLowerCase().split("\n").map(function(e) {
+			return "\\b" + e + "\\b";
+		}).join("|") + "\\b");
+	}
+});
+
+function check (text, re) {
+	return text.toLowerCase()
+		.replace(/[4@]/g, "a")
+		.replace(/[1]/g, "l")
+		.replace(/\$&/g, "s")
+		.replace(/\0/g, "o")
+		.replace(/\!/g, "i")
+//		.replace(/* spaces between single characters: l i k e this */)
+		.match(re);
+}
 
 module.exports = function(core) {
 
-	init();
-	core.on('text', function(message, callback) {
-		var room = message.room, text, customWords, index, l;
+	var actions = [ "text", "user", "room", "edit" ];
 
-		log("Heard \"text\" event");
-        if (message.session){
-            var gateway = message.session.substring(0, message.session.indexOf(":"));
-            if(gateway == "irc" || gateway=="twitter") {
-				return callback();
-            }
-        }
+	actions.forEach(function(action) {
+		core.on(action, function(a, next) {
+			var text = [
+//					(a.id || ""),
+					(a.text || ""),
+					(a.title || ""),
+					(a.to || "")
+				].join(" "),
+				appliedFilters = [],
+				matches;
 
-		text = message.text;
-		text += " " + message.to;
+			if (action === "text" || action === "edit") {
+				var room = a.room;
+				log.i("Heard \"text\" event", a);
+				if (room.params && room.params.antiAbuse && room.params.antiAbuse.spam) {
 
-		if(room.params && room.params.antiAbuse) {
-			if (room.params.antiAbuse.wordblock) {
-				if(rejectable(text)){
-					if(!message.labels) message.labels = {};
-					message.labels.abusive = 1;
-					log(message);
-					return callback();
-				}
-			}
+					if (room.params && room.params.antiAbuse) {
+						var customPhrases = room.params.antiAbuse.customPhrases;
+						if (customPhrases instanceof Array && customPhrases.length !== 0) {
+							filters.custom = new RegExp("\\b" + customPhrases.map(function(e) {
+								return "\\b" + regReplace.escape(e) + "\\b";
+							}).join("|") + "\\b");
+							appliedFilters.push(filters.custom);
+						}
+					}
 
-			if (message.room.params.antiAbuse.customWords) {
-				customWords = message.room.params.antiAbuse.customWords;
-				textMessage = message.text;
+					if (room.params.antiAbuse.block && room.params.antiAbuse.block.english) {
+						appliedFilters.push(filters.en);
+						appliedFilters.push(filters.hi);
+					}
 
-				for (index=0, l = customWords.length; index<l; ++index) {
-					if((textMessage.toLowerCase()).indexOf(customWords[index])!= -1) {
-						if(customWords[index]==='') continue;
-						log("You cannot use banned words!");
-						if(!message.labels) message.labels = {};
-						message.labels.abusive = 1;
-						break;
+					a.tags = Array.isArray(a.tags) ? a.tags : [];
+					matches = appliedFilters.map(function(re) {
+						return check(text, re);
+					}).filter(function(b)  {return !!b; });
+					log.i(matches, text);
+					if (matches.length) {
+						if (a.id === a.thread) a.tags.push("abusive", "thread-hidden");
+						a.tags.push("abusive", "hidden");
+						return next();
 					}
 				}
+				return next();
 			}
-		}
 
-		return callback();
-	}, "antiabuse");
+			if (action === "room") {
+				text = text + " " + a.room.description;
+				appliedFilters.push(filters.en);
+				appliedFilters.push(filters.hi);
+				var limit = 10000;
+				log.d("room action:", a);
+				matches = appliedFilters.map(function(re) {
+					return check(text, re);
+				}).filter(function(b)  {return !!b; });
 
-	core.on("room", function(action, callback){
-		var room  = action.room;
-        var text = room.id+(room.name?(" "+room.name):"")+" "+(room.description?(" "+room.description):"");
-		if(rejectable(text)) return callback(new SbError("Abusive_room_name"));
-		callback();
-	}, "antiabuse");
-};
-
-var init=function(){
-	fs.readFile(__dirname + "/blockedWords.txt","utf-8", function (err, data) {
-		if (err) throw err;
-
-		data.split("\n").forEach(function(word) {
-			if (word) {
-				word.replace(/\@/g,'a');
-				word.replace(/\$/g,'s');
-
-				word = word.replace(/\W+/, ' ').toLowerCase().trim();
-				if (word.length===0) {
-					return;
+				if (matches.length) {
+					return next(new SbError("Abusive_room_name"));
 				}
-				if (word.length > longest) {
-					longest = word.length;
-				}
-				blockWords[word] = true;
+
+				if (a.room.params && a.room.params.antiAbuse) {
+					var c = a.room.params.antiAbuse.customPhrases;
+
+					if (Array.isArray(c)) {
+						a.room.params.antiAbuse.customPhrases = c.filter(function (b) {
+							return b.trim();
+						});
+
+						if (a.room.params.antiAbuse.customPhrases.join(" ").length > limit) {
+							return next(new Error("ERR_LIMIT_NOT_ALLOWED"));
+						}
+						next();
+					} else {
+						next(new Error("INVALID_WORDBLOCK"));
+					}
+				} else next();
 			}
-		});
+
+			if (action === "user") {
+				text = text + " " + a.user.description;
+				appliedFilters.push(filters.en);
+				appliedFilters.push(filters.hi);
+				matches = appliedFilters.map(function(re) {
+					return check(text, re);
+				}).filter(function(b)  {return !!b; });
+				if (matches.length) {
+					return next(new SbError("Abusive_user_name"));
+				}
+
+				next();
+			}
+
+		}, "antiabuse");
 	});
-
 };
-
-var rejectable = function(text) {
-    log("text", text);
-	var i, l, j, words, phrase;
-	words=text.replace(/\@/g,'a').replace(/\$/g,'s');
-	words = words.toLowerCase().split(/\W+/);
-
-	for(i=0,l=words.length-1;i<l;i++) {
-		phrase = words[i];
-		for (j=i+1; j<=l; j++) {
-			phrase = phrase + ' ' + words[j];
-			if (phrase.length <= longest) {
-				words.push(phrase);
-			}
-		}
-	}
-
-	for(i=0,l=words.length;i<l;i++) {
-		if (blockWords[words[i]]) {
-			log("found the word " + words[i]+"---");
-			return true;
-		}
-	}
-};
-

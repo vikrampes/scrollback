@@ -1,48 +1,76 @@
-/* jshint browser: true */
-/* global $, libsb */
+/* eslint-env browser */
 
-/*
- - Email digest frequency (Daily/Weekly, Never)
- - Email me when I'm mentioned in a room (On/Off)
-*/
-var formField = require('../lib/formField.js');
+"use strict";
 
-libsb.on('pref-show', function (tabs, next) {
-    //email
-    var user = tabs.user;
+module.exports = (core, config, store) => {
+	const React = require("react"),
+		  ToggleGroup = require("../ui/components/toggle-group.js")(core, config, store),
+		  ToggleSwitch = require("../ui/components/toggle-switch.js")(core, config, store);
 
-    var $div = $('<div>');
+	class EmailConfig extends React.Component {
+		constructor(props) {
+			super(props);
+		}
 
-    if (!user.params.email) user.params.email = {};
-    if (typeof user.params.email.notifications === "undefined") user.params.email.notifications = true;
-    if (typeof user.params.email.frequency === "undefined") user.params.email.frequency = "daily";
-    $div.append(formField("Mention notifications via email", "toggle", "mention", user.params.email.notifications));
+		render() {
+			let frequencyItems = [
+					{ value: "daily", label: "Daily" },
+					{ value: "never", label: "Never" }
+				];
 
-    switch (user.params.email.frequency) {
-		case 'daily':
-			$div.append(formField("Email digest frequency", 'radio', 'email-freq', [["email-freq-daily", "Daily", true], ["email-freq-never", "Never"]]));
-			break;
-		case 'never':
-			$div.append(formField("Email digest frequency", 'radio', 'email-freq', [["email-freq-daily", "Daily"], ["email-freq-never", "Never", true]]));
-			break;
-		default:
-			$div.append(formField("Email digest frequency", 'radio', 'email-freq', [["email-freq-daily", "Daily", true], ["email-freq-never", "Never"]]));
-    }
+			return (
+				<div>
+					<div className="settings-item">
+						<div className="settings-label">Mention notifications via email</div>
+						<div className="settings-action">
+							<ToggleSwitch ref="notifications" checked={this.props.notifications} />
+						</div>
+					</div>
+					<div className="settings-item">
+						<div className="settings-label">Email digest frequency</div>
+						<div className="settings-action">
+							<ToggleGroup ref="frequency" className="toggle-group" name="frequency" items={frequencyItems} value={this.props.frequency} />
+						</div>
+					</div>
+				</div>
+			);
+		}
 
-    tabs.email = {
-        text: "Email",
-        html: $div,
-        prio: 900
-    };
+		onSave(user) {
+			user.params.email = {
+				frequency: this.refs.frequency.value,
+				notifications: this.refs.notifications.checked
+			};
+		}
 
-    next();
-}, 500);
+		componentDidMount() {
+			this.saveHandler = this.onSave.bind(this);
 
-libsb.on('pref-save', function (user, next) {
-    user.params.email = {
-        frequency: $('input:radio[name="email-freq"]:checked').next().text().toLowerCase(),
-        notifications: $('#mention').is(':checked')
-    };
+			core.on("pref-save", this.saveHandler, 100);
+		}
 
-    next();
-}, 500);
+		componentWillUnmount() {
+			core.off("pref-save", this.saveHandler);
+		}
+	}
+
+	EmailConfig.propTypes = {
+		frequency: React.PropTypes.string.isRequired,
+		notifications: React.PropTypes.bool.isRequired
+	};
+
+	core.on("pref-show", tabs => {
+		let params = tabs.user.params,
+			container = document.createElement("div"),
+			frequency = (params && params.email && params.email.frequency) ? params.email.frequency : "daily",
+			notifications = (params && params.email && typeof params.email.notifications === "boolean") ? params.email.notifications : true;
+
+		React.render(<EmailConfig frequency={frequency} notifications={notifications} />, container);
+
+		tabs.email = {
+			text: "Email",
+			html: container
+		};
+	}, 600);
+};
+

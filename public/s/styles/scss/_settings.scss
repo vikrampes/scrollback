@@ -1,0 +1,40 @@
+// scss-lint:disable ColorVariable
+
+/**
+ * Global definitions for the client
+ * Fonts and colors are defined in lace
+ */
+
+// Font settings
+$icon-font-path: "../fonts" !default;
+
+// Colors
+$accent-color: #3ca !default;
+$dark-color: #444 !default;
+$light-color: #fff !default;
+$link-color: #5780d3 !default;
+$info-color: #4b9ddb !default;
+$success-color: #77b267 !default;
+$warning-color: #e2a63e !default;
+$error-color: #d26c5e !default;
+
+$palette: (#dc7a52, #4573bb, #77b267, #d26c52, #6766ba, #50a094, #d5456b, #489ddb, #53afbd, #8d5db6) !default;
+
+// Misc
+$roundness: 3px !default;
+
+$screenx: "only screen and (min-width: 18em)" !default;
+$screenxx: "only screen and (min-width: 21em)" !default;
+$screenxxx: "only screen and (min-width: 27em)" !default;
+$screenxxxx: "only screen and (min-width: 50em)" !default;
+$screenxxxxx: "only screen and (min-width: 70em)" !default;
+
+$bar-height: 3.5em !default;
+
+$settings: (general, irc, twitter, threader, authorizer, requests, spam, seo, customization, embed, profile, email, notification) !default;
+$modes: (home, room, chat, search) !default;
+$roles: (guest, registered, follower, owner) !default;
+$permissions: (write, read) !default;
+$embeds: (toast, canvas) !default;
+$contexts: (normal, android, ios) !default;
+$states: (online, offline, connecting) !default;

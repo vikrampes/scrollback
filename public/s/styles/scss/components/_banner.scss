@@ -1,0 +1,208 @@
+@mixin banner-image($size: 1) {
+    $base: "https://scrollback.github.io/static/assets/banner";
+
+    background-image: url(#{$base}/banner@#{$size}x.jpg)
+}
+
+@include exports("banner") {
+    .banner {
+        width: 100%;
+
+        &-landing {
+            @include banner-image;
+
+            display: table;
+            table-layout: fixed;
+            height: 100%;
+            width: 100%;
+            background-size: cover;
+            background-position: center;
+            text-align: center;
+            color: $light-color;
+            min-height: 36em;
+            height: 70%;
+
+            // Landscape orientation
+            @media only screen and (orientation: landscape) {
+                @include banner-image(1);
+
+                @include retina(1.3) { @include banner-image(1.3); }
+
+                @include retina(2) { @include banner-image(2); }
+
+                @include retina(3) { @include banner-image(3); }
+            }
+
+            @media only screen and (min-device-width: 320px) and (orientation: landscape) {
+                @include banner-image(1.3);
+
+                @include retina(1.3) { @include banner-image(2); }
+
+                @include retina(2) { @include banner-image(3); }
+
+                @include retina(3) { @include banner-image(4); }
+            }
+
+            @media only screen and (min-device-width: 414px) and (orientation: landscape) {
+                @include banner-image(2);
+
+                @include retina(1.3) { @include banner-image(3); }
+
+                @include retina(2) { @include banner-image(4); }
+            }
+
+            @media only screen and (min-device-width: 640px) and (orientation: landscape) {
+                @include banner-image(3);
+
+                @include retina(1.3) { @include banner-image(4); }
+            }
+
+            @media only screen and (min-device-width: 768px) and (orientation: landscape) { @include banner-image(4); }
+
+            // Potrait orientation
+            // FIXME: we should really have separate images
+            @media only screen and (orientation: potrait) {
+                @include banner-image(2);
+
+                @include retina(1.3) { @include banner-image(3); }
+
+                @include retina(2) { @include banner-image(4); }
+            }
+
+            @media only screen and (min-device-width: 320px) and (orientation: potrait) {
+                @include banner-image(3);
+
+                @include retina(1.3) { @include banner-image(4); }
+            }
+
+            @media only screen and (min-device-width: 414px) and (orientation: potrait) { @include banner-image(4); }
+
+            &-content {
+                display: table-cell;
+                vertical-align: middle;
+                height: 100%;
+                width: 100%;
+
+                &-inner {
+                    max-width: 27em;
+                    margin: auto;
+                    padding: 1em;
+
+                    > p {
+                        margin: 1em;
+                        font-size: 1.5em;
+                    }
+                }
+            }
+
+            &-entry {
+                input { border: 0; }
+            }
+
+            &-nav {
+                list-style: none;
+                margin: 1em 0;
+
+                li { display: inline-block; }
+
+                a {
+                    display: inline-block;
+                    color: currentColor;
+                    text-transform: uppercase;
+                    border: 0;
+                    padding: 1em;
+                    border-radius: $roundness;
+
+                    &:focus, &:hover { background-color: rgba(255, 255, 255, .3); }
+
+                    &:active { background-color: rgba(255, 255, 255, .4); }
+                }
+            }
+        }
+
+        &-cover {
+            @extend %clearfix;
+
+            position: relative;
+            color: $light-color;
+            min-height: 12em;
+            overflow: hidden;
+
+            .invalid-room.mode-room & { display: none; }
+
+            &-image {
+                position: absolute;
+                top: 0;
+                left: 0;
+                height: 100%;
+                width: 100%;
+                background-size: 100%;
+                background-size: cover;
+                background-position: center center;
+                background-repeat: no-repeat;
+                z-index: 0;
+            }
+
+            &-content {
+                position: relative;
+                height: 100%;
+                width: 100%;
+                padding: 1em;
+                text-align: center;
+                background-image: linear-gradient(to bottom, rgba(85,85,85,.7), rgba(85,85,85,.7));
+                z-index: 1;
+            }
+
+            &-logo {
+                height: 8em;
+                width: 8em;
+                margin: 1em auto;
+                background-size: 100%;
+                background-size: cover;
+                background-position: center center;
+                border-radius: 50%;
+                box-shadow: 0 0 0 2px rgba(255,255,255,.5);
+            }
+
+            &-description {
+                max-width: 60em;
+                margin: auto;
+            }
+
+            &-button {
+                margin: 1em;
+                background-color: rgba(255, 255, 255, .3);
+
+                &:hover { background-color: rgba(255, 255, 255, .4); }
+
+                &:active { background-color: rgba(255, 255, 255, .5); }
+            }
+
+            a {
+                color: currentColor;
+                opacity: .6;
+
+                &:focus, &:hover, &:active { opacity: 1; }
+            }
+        }
+
+        &-entry-container {
+            width: 100%;
+            background-color: darken($light-color, 1%);
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            padding: 1em;
+        }
+
+        &-entry {
+            position: relative;
+            width: 18em;
+            margin: 1em auto;
+            max-width: 100%;
+
+            [type=text] {
+                width: 100%;
+                padding: .75em 1em;
+            }
+        }
+    }
+}

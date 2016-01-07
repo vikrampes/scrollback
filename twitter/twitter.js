@@ -1,49 +1,59 @@
 var log = require("../lib/logger.js");
-var logTwitter = log;
 var htmlEncode = require('htmlencode');
 var Twit = require('twit');
 var guid = require("../lib/generate.js").uid;
-var config = require('../config.js');
 var OAuth = require('oauth');
-var internalSession = Object.keys(config.whitelists)[0];
-var host = config.http.host;
-var redis = require('../lib/redisProxy.js').select(config.redisDB.twitter);
-var twitterConsumerKey = config.twitter.consumerKey;
-var twitterConsumerSecret = config.twitter.consumerSecret;
-var debug = config.twitter.debug;
+var config, redis, twitterConsumerKey, twitterConsumerSecret;
 var core;
-var expireTime = 15 * 60;//expireTime for twitter API key...
-var timeout  = 1000 * 60 ;//search Interval
-var maxTweets = 1;//max tweets to search in timeout inteval
+var expireTime = 15 * 60; // expireTime for twitter API key...
+var timeout, host;
+var maxTweets = 1; // max tweets to search in timeout inteval
 var pendingOauths = {};
-var oauthTimeout = 15 * 60 * 60;//15 min
-module.exports = function(coreObj) {
+var oauthTimeout = 15 * 60 * 1000; // 15 min
+var functionUtils = require('../lib/function-utils.js');
+var silentTimeout;
+module.exports = function(coreObj, conf) {
+	config = conf;
+	if (config && config.consumerKey && config.consumerSecret) {
+		redis = require('redis').createClient();
+		redis.select(config.redisDB);
+		twitterConsumerKey = config.consumerKey;
+		twitterConsumerSecret = config.consumerSecret;
+		timeout  = config.timeout; // search Interval
+		silentTimeout = config.silentTimeout;
 
-	if (config.twitter && config.twitter.consumerKey && config.twitter.consumerSecret) {
 		log("twitter app started");
-		if (!debug) {
-			logTwitter = log.tag('twitter');
-		}
 		core = coreObj;
+		host = config.global.host;
 		init();
 
 		core.on("http/init", function(payload, callback) {
-			payload.twitter = {
-				get: function(req,res,next) {
-					getRequest(req,res,next);
+			payload.push({
+				get: {
+					"/r/twitter/*": function(req,res,next) {
+						getRequest(req,res,next);
+					}
 				}
-			};
+			});
 			callback(null, payload);
 		}, "setters");
 
+		core.on('text', onText, "watcher");
 		core.on("room", twitterRoomHandler, "gateway");
 		core.on("room", twitterParamsValidation, "appLevelValidation");
-	}
-	else {
+	} else {
 		log("Twitter module is not enabled.");
 	}
 };
 
+function onText(action, callback) {
+	callback();//callback before processing it.
+	var room = action.room;
+
+	if (room.params && room.params.twitter && room.params.twitter.tags && !(/^twitter/.test(action.session))) {
+		redis.set("twitter:lastMessageTime:" + room.id, action.time);
+	}
+}
 
 function twitterParamsValidation(action, callback) {
 	for (var i = 0;i < action.room.identities.length;) { //remove all twitter identities
@@ -69,45 +79,42 @@ function twitterRoomHandler(action, callback) {
  *add it to room object
  */
 function addTwitterTokens(room, callback) {
-	logTwitter("adding twitter tokens.", JSON.stringify(room));
-	redis.multi(function(multi) {
-		var key = room.room.params.twitter.username;
-		multi.get("twitter:userData:token:" + key);
-		multi.get("twitter:userData:tokenSecret:" + key);
-		multi.get("twitter:userData:profile:" + key);
-		multi.exec(function(err, replies) {
-			log("replies from redis", replies);
-			if (err) {
-				logTwitter(" Error: ", err);
-                room.params.twitter.error = "ERR_TWITTER_LOGIN";
+	log.d("adding twitter tokens.", room);
+	var multi = redis.multi();
+	var key = room.room.params.twitter.username;
+	multi.get("twitter:userData:token:" + key);
+	multi.get("twitter:userData:tokenSecret:" + key);
+	multi.get("twitter:userData:profile:" + key);
+	multi.exec(function(err, replies) {
+		log("replies from redis", replies);
+		if (err) {
+			log(" Error: ", err);
+			room.params.twitter.error = "ERR_TWITTER_LOGIN";
+			callback();
+		}
+		else {
+			if (replies[0] && replies[1] && replies[2]) {
+				log("twitter ---adding new values....");
+				room.room.params.twitter.token = replies[0];
+				room.room.params.twitter.tokenSecret = replies[1];
+				room.room.params.twitter.profile = JSON.parse(replies[2]);
+				room.room.params.twitter.tags = room.room.params.twitter.tags || "";
+				room.room.params.twitter.tags = formatString(room.room.params.twitter.tags);
+				log("added values from redis");
+				if (room.room.params.twitter.tags) addIdentity(room, key);
 				callback();
+				var multi2 = redis.multi();
+				multi2.del("twitter:userData:token:" + key);
+				multi2.del("twitter:userData:tokenSecret:" + key);
+				multi2.del("twitter:userData:profile:" + key);
+				multi2.exec(function(err, r) {
+					log("values deleted from redis", r);
+				});
+			} else {//new values are not present in redis.. copy old
+				copyOld(room, callback);
 			}
-			else {
-				if (replies[0] && replies[1] && replies[2]) {
-					logTwitter("twitter ---adding new values....");
-					room.room.params.twitter.token = replies[0];
-					room.room.params.twitter.tokenSecret = replies[1];
-					room.room.params.twitter.profile = JSON.parse(replies[2]);
-					room.room.params.twitter.tags = room.room.params.twitter.tags || "";
-					room.room.params.twitter.tags = formatString(room.room.params.twitter.tags);
-					log("added values from redis");
-					addIdentity(room, key);
-					callback();
-					redis.multi(function(multi) {
-						multi.del("twitter:userData:token:" + key);
-						multi.del("twitter:userData:tokenSecret:" + key);
-						multi.del("twitter:userData:profile:" + key);
-						multi.exec(function(err, r) {
-							log("values deleted from redis", r);
-						});
-					});
 
-				} else {//new values are not present in redis.. copy old
-					copyOld(room, callback);
-				}
-
-			}
-		});
+		}
 	});
 }
 function addIdentity(room, username) {
@@ -116,8 +123,7 @@ function addIdentity(room, username) {
 
 
 function copyOld(room, callback) {
-	logTwitter("copyOld");
-
+	log("copyOld");
 	var old, newParams;//old account
 	if(room.old && room.old.params) old = room.old.params.twitter;
     newParams = room.room.params.twitter;
@@ -127,7 +133,7 @@ function copyOld(room, callback) {
 		newParams.profile = old.profile;
 		if(!newParams.tags) newParams.tags = "";
 		newParams.tags = formatString(newParams.tags);
-		addIdentity(room, old.profile.screen_name);
+		if (newParams.tags) addIdentity(room, old.profile.screen_name);
 		callback();
 	}
 	else {
@@ -153,25 +159,39 @@ function init() {
  *Get all accounts where gateway = 'twitter' and init searching.
  */
 function initTwitterSearch() {
-	log("getting room data....");
-	core.emit("getRooms",{identity: "twitter", session: internalSession }, function(err, data) {
+	core.emit("getRooms",{identity: "twitter", session: "internal-twitter" }, function(err, data) {
+		var fnList = [];
 		if (!err) {
-			if(debug) logTwitter("data returned from labelDB: ", JSON.stringify(data));
 			var rooms = data.results;
+			log("Number of rooms:", data.results.length);
 			rooms.forEach(function(room) {
-				fetchTweets(room);
+				fnList.push(function() { tryRoom(room);});
 			});
+			functionUtils.execFunctionsAfterSometime(fnList, timeout / 4);
 		}
 	});
 }
+
+
+
+function tryRoom(room) {
+	redis.get("twitter:lastMessageTime:" + room.id, function(err, data) {
+		log("last Message Time: ", data, new Date().getTime() - parseInt(data), silentTimeout);
+		if (err || !data || (new Date().getTime() - parseInt(data) > silentTimeout)) {
+			fetchTweets(room);
+		}
+	});
+}
+
 /**
  *Connect with twitter
  *1. if tag is empty will not connect
  */
 function fetchTweets(room) {
 
-	if (room.params && room.params.twitter  && room.params.twitter.tags && room.params.twitter.token && room.params.twitter.tokenSecret) {
-		logTwitter("connecting for room: ", room);
+	if (room.params && room.params.twitter  && room.params.twitter.tags &&
+		room.params.twitter.token && room.params.twitter.tokenSecret) {
+		log("connecting for room: ", room);
 		var twit;
 		twit = new Twit({
 			consumer_key: twitterConsumerKey ,
@@ -179,9 +199,9 @@ function fetchTweets(room) {
 			access_token:  room.params.twitter.token,
 			access_token_secret: room.params.twitter.tokenSecret
 		});
-		logTwitter("calling room,", room);
 		redis.get("twitter:lastTweetTime:" + room.id, function(err, data) {
-
+			log("Last tweet time:", room.id, err, data);
+			var startTime = new Date().getTime();
 			twit.get(
 				'search/tweets', {
 					q: room.params.twitter.tags.split(" ").join(" OR "),
@@ -189,14 +209,18 @@ function fetchTweets(room) {
 					result_type: "recent"
 				}, function(err, reply) {
 					if (err) {
-						logTwitter("Error: ", err);
+						log("error: ", err);
 					}
 					else {
-						//logTwitter("var reply= ", JSON.stringify(reply));
-						if (reply.statuses && reply.statuses[0] && !reply.statuses[0].retweeted && 
-							(new Date(reply.statuses[0].created_at).getTime()) > (data ? parseInt(data, 10) : 1)) {
-							redis.set("twitter:lastTweetTime:" + room.id, (new Date(reply.statuses[0].created_at).getTime()), function(err, data) {
-								logTwitter("added data to room...", err, data);
+						log("var reply= ", reply);
+						if (new Date().getTime() - startTime >= timeout) {
+							log.e("Twitter search is taking time more then the search interval: ",
+								  (new Date().getTime() - startTime), room.id);
+						} else if (reply.statuses && reply.statuses[0] && !reply.statuses[0].retweeted &&
+								   (new Date(reply.statuses[0].created_at).getTime()) > (data ? parseInt(data, 10) : 1)) {
+							redis.set("twitter:lastTweetTime:" + room.id,
+									  (new Date(reply.statuses[0].created_at).getTime()), function(err, data) {
+								log("added data to room...", room.id, err, data);
 								sendMessages(reply, room);
 							});
 						}
@@ -227,7 +251,9 @@ function sendMessages(replies, room) {
 					gateway: "twitter"
 				}
 			}, function(err, init) {
-				if (err) return;
+				if (err) {
+					log.e("Error: ", err);
+				}
 				var message = {
 					id: guid(),
 					type: "text",
@@ -235,10 +261,11 @@ function sendMessages(replies, room) {
 					from: init.user.id,
 					to: room.id,
 					time: new Date().getTime(),
+					labels: {twitter: 1},
 					session: "twitter://" + r.user.screen_name
 				};
 				core.emit("text", message, function(err) {
-					if(err) log("error while sending message:" , err);
+					if(err) log.e("error while sending message:" , err);
 				});
 			});
 		}
@@ -270,10 +297,13 @@ function getRequest(req, res, next) {
 		oauth.getOAuthRequestToken({"scope": "https://api.twitter.com/oauth/request_token"},
 								function(error, oauth_token, oauth_token_secret/*, results*/) {
 			res.redirect("https://api.twitter.com/oauth/authenticate?oauth_token=" + oauth_token);
-			pendingOauths[uid].oauthToken = oauth_token;
-			pendingOauths[uid].oauthTokenSecret = oauth_token_secret;
-
-			log("callback url", arguments);
+			if (pendingOauths[uid]) {
+				pendingOauths[uid].oauthToken = oauth_token;
+				pendingOauths[uid].oauthTokenSecret = oauth_token_secret;
+				log("callback url", arguments);
+			} else {
+				log.e("Pending oauth expired before callback", uid);
+			}
 		});
 		log("twitter oauth=", oauth);
 	}
@@ -288,15 +318,13 @@ function getRequest(req, res, next) {
 					console.log('oauth_access_token: ' + access_token);
 					console.log('oauth_access_token_secret: ' + access_token_secret);
 					//save tokens.
-					console.log("results: ", results);
 					var uid = results.screen_name;
-					redis.multi(function(multi) {
-						multi.setex("twitter:userData:token:" + uid, expireTime, access_token);
-						multi.setex("twitter:userData:tokenSecret:" + uid, expireTime, access_token_secret);
-						multi.setex("twitter:userData:profile:" + uid, expireTime, JSON.stringify(results));
-						multi.exec(function(err,replies) {
-							logTwitter("user data added: ", replies);
-						});
+					var multi = redis.multi();
+					multi.setex("twitter:userData:token:" + uid, expireTime, access_token);
+					multi.setex("twitter:userData:tokenSecret:" + uid, expireTime, access_token_secret);
+					multi.setex("twitter:userData:profile:" + uid, expireTime, JSON.stringify(results));
+					multi.exec(function(err,replies) {
+						log("user data added: ", replies);
 					});
 					return res.render(__dirname + "/login.jade", {profile: { screen_name: results.screen_name }});
 				}
@@ -316,10 +344,11 @@ function deletePendingOAuths() {
 			var t = new Date().getTime(),
 			     pt = pendingOauths[id].time;
 			if (t - pt >= oauthTimeout) {
-				log("deleting Pending oauth");
+				log("deleting Pending oauth", id);
 				delete pendingOauths[id];
 			}
 		}
 	}
 }
+
 /**** get request handler *******/

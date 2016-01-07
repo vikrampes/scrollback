@@ -1,52 +1,90 @@
-var core = require("../test/mock-core.js")();
+"use strict";
+
 var rooms = {
 	"scrollback": {
-		id:"scrollback",
-		description:"this is room",
-		type:"room",
-		identities:["irc://harry.scrollback.io/#scrollback"],
+		id: "scrollback",
+		description: "this is room",
+		type: "room",
+		identities: ["irc://harry.scrollback.io/#scrollback"],
 		timezone: 300,
-		params:{}
+		params: {},
+		guides: {}
 	}
 };
 
 var users = {
-	"harish":{
+	"harish": {
 		id: "harish",
-		description: "this is user",
+		description: "this is harish",
 		type: "user",
 		identities: ["mailto:harish@scrollback.io"],
 		timezone: 330,
-		params: {}
+		params: {},
+		guides: {}
+	},
+	"manoj": {
+		id: "manoj",
+		description: "this is manoj",
+		type: "user",
+		identities: ["mailto:manoj@scrollback.io"],
+		timezone: 330,
+		params: {},
+		guides: {}
+	}
+};
+
+
+var threads = {
+	some:{
+		id:"dskjf34jkwebfjfdh"
+	}
+};
+
+var texts ={
+	one:{
+		id:"kdflhjsdhj",
+		thread:"dskjf34jkwebfjfdh",
+		text:"helo manoj",
+		from:"harish",
+		to:"scrollback"
 	}
 };
 
 module.exports = function(c) {
-	core = c;
-	core.on("getRooms",function(payload, callback) {		
-		if(payload.id) {
-			payload.results = [];
-			if(rooms[payload.id]) {
-				payload.results.push(rooms[payload.id]);
-			}
-		}
-		callback();
-	},"storage");
-	core.on("getUsers",function(payload, callback) {
-		if(payload.id) {
-			payload.results = [];
-			if(users[payload.id]) {
-				payload.results.push(users[payload.id]);
-			}
-		}
-		callback();
-	},"storage");
-	core.on("room", function(data, callback) {
-		rooms[data.id] = data;
-		callback();
-	},"storage");
-	core.on("user", function(data, callback) {
-		users[data.id] = data;
-		callback();
-	},"storage");
-}
+	var core = c;
+
+	core.on("getUsers", function (obj, next) {
+		process.nextTick(function(){
+			obj.results = [users.harish];
+			next();
+		});
+	});
+
+	core.on("getEntities", function(query, next){
+		process.nextTick(function(){
+			query.results = [rooms.scrollback];
+			next();
+		});
+	});
+
+	core.on("getRooms", function (query, next) {
+		process.nextTick(function(){
+			query.results = [rooms.scrollback];
+			next();
+		});
+	});
+
+	core.on("getTexts", function (query, next) {
+		process.nextTick(function(){
+			query.results = [texts.one];
+			next();
+		});
+	});
+
+	core.on("getThreads", function (query, next) {
+		process.nextTick(function(){
+			query.results = [threads.some];
+			next();
+		});
+	});
+};

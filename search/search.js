@@ -1,7 +1,6 @@
-var log = require("../lib/logger.js");
-var config = require('../config.js');
-var searchDB = require('../lib/redisProxy.js').select(config.redisDB.search);
+var log = require("../lib/logger.js"), searchDB;
 var es = require('elasticsearch');
+var config;
 var indexName = 'sb';
 var client;
     
@@ -9,7 +8,6 @@ var searchTimeout = 10000;
 var messageCount = 0;
 var updateThreads = [];
 var indexAtCount = 200;
-
 
 /*
     this function takes a list of ids and gets the thread objects from the elastic search.
@@ -145,18 +143,21 @@ function indexTexts() {
     });
 }
 
-module.exports = function (core) {
-    if(!client) {
-        init();
-    }
-    if (config.search) {
-        
+module.exports = function (core, conf) {
+	config = conf;
+    searchDB = require('redis').createClient();
+    if (config && config.server && config.port) {
+		searchDB.select(config.redisDB);
+        if(!client) {
+            init();
+        }
         /*Index text*/
         core.on('text', function (message, callback) {
             if (message.type === "text") {
                 
                 if(message.threads) {
                     message.threads.forEach(function(e) {
+						if(!e.id) return;
                         if(updateThreads.indexOf(e.id)<0) {
                             updateThreads.push(e.id);
 
@@ -165,10 +166,12 @@ module.exports = function (core) {
                                 room: message.to
                             }), insertText);
 
-                            searchDB.sadd("updateThread", e.id);
+                            searchDB.sadd("updateThread", e.id, function(err, res) {
+								if(err) log.d(err, res);
+							});
                         }else {
                             insertText();
-                        }
+                        }	
 
                         function insertText() {
                             searchDB.sadd("thread:{{"+e.id+"}}:texts", message.id+":"+message.from+":"+message.text, function() {
@@ -343,15 +346,20 @@ function searchThreads(data, callback){
  
 function init() {
     log("Connecting to Elasticsearch server .... ");
-    var searchServer = config.search.server + ":" + config.search.port;
-    client = new es.Client({
-        host: searchServer
-    });
-    
-    searchDB.smembers("updateThread", function(err, threads) {
-        if(threads) {
-            updateThreads = updateThreads.concat(threads);
-            messageCount = updateThreads.length;
-        }
-    });
+    if (config.server && config.port) {
+        var searchServer = config.server + ":" + config.port;
+        client = new es.Client({
+            host: searchServer
+        });
+
+        searchDB.smembers("updateThread", function(err, threads) {
+            if(threads) {
+                updateThreads = updateThreads.concat(threads);
+                messageCount = updateThreads.length;
+            }
+        });
+    } else {
+        log("search server configaration are not present.");
+    }
+
 }

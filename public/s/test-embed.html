@@ -1,19 +1,24 @@
 <!doctype html>
 <html>
-	<head><title>Scrollback embed tester</title></head>
+	<head>
 
-	<style type="text/css">
-		.scrollback-container {
-			width: 640px;
-			height: 480px;
-			max-width: 100%;
-			max-height: 100%;
-			margin: auto;
-		}
-	</style>
+		<title>Scrollback embed tester</title>
+
+		<style type="text/css">
+			.scrollback-container {
+				width: 640px;
+				height: 480px;
+				max-width: 100%;
+				max-height: 100%;
+				margin: auto;
+			}
+		</style>
+
+	</head>
 
 	<body>
 		<div id="scrollback-container" class="scrollback-container"></div>
+
 		<script>
 			var opts = {};
 
@@ -23,10 +28,11 @@
 
 			opts.room = opts.room || 'scrollback';
 			opts.theme = opts.theme || 'dark';
-			opts.embed = opts.embed || 'toast'
+			opts.form = opts.form || 'toast';
 
 			try {
 				if(opts.minimize) opts.minimize = JSON.parse(opts.minimize);
+				if(opts.alertSound) opts.alertSound = JSON.parse(opts.alertSound);
 			} catch(e) {}
 
 			window.scrollback = opts;
@@ -34,7 +40,8 @@
 			console.log(window.scrollback);
 
 			(function(d,h,e){e=d.createElement('script');e.async=1;e.src=h+'/client.min.js';
-			scrollback.host=h;d.body.appendChild(e);}(document,location.protocol+"//"+location.hostname));
+			scrollback.host=h;d.body.appendChild(e);}(document,location.protocol+"//"+location.host));
 		</script>
+
 	</body>
 </html>

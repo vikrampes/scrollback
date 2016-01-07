@@ -1,10 +1,16 @@
 *~
 
 .*
-!/.gitignore
-!/.jscs.json
-!/.jshintrc
-!test/.jshintrc
+!.brackets.json
+!.editorconfig
+!.gitignore
+!.git-hooks
+!.babelrc
+!.eslintrc
+!.jsbeautifyrc
+!.scss-lint.yml
+!.travis.yml
+!.hound.yml
 
 *.seed
 *.log
@@ -19,25 +25,26 @@
 *.bundle.js
 *.min.js
 
-lib-cov
-pids
-logs
-dump
-data
-results
-
 node_modules
 bower_components
 
-myConfig.js
+server-config.js
 client-config.js
 
-public/s/styles/lace
-public/s/styles/dist
-public/s/scripts/lib
-ircClient/Data
-xunit.xml
-public/t/coverage-*.html
+/leveldb-storage/data/
+/leveldb-storage/data-*
+/leveldb-storage/backup-*
 /ircClient/myConfig.js
+/ircClient/Data
 /test/config.js
+/test/config-defaults.js
+
+/public/s/sb.js
+/public/s/dist
+/public/s/tmp
+
+/mocha-output-selenium.json
+/mocha-output-unit.json
 /xunit-mocha.xml
+/patchup-room
+/mocha-output.json

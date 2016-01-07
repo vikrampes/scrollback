@@ -1,0 +1,486 @@
+/**
+* Stylesheet for the client
+*/
+
+// Import global settings (must be the first)
+@import "settings";
+
+
+// Import base styles from lace
+@import "../../../../bower_components/lace/src/scss/base";
+@import "../../../../bower_components/lace/src/scss/grid";
+@import "../../../../bower_components/lace/src/scss/alertbar";
+@import "../../../../bower_components/lace/src/scss/modal";
+@import "../../../../bower_components/lace/src/scss/popover";
+@import "../../../../bower_components/lace/src/scss/toggleswitch";
+@import "../../../../bower_components/lace/src/scss/togglegroup";
+@import "../../../../bower_components/lace/src/scss/radiogroup";
+@import "../../../../bower_components/lace/src/scss/button";
+@import "../../../../bower_components/lace/src/scss/entry";
+@import "../../../../bower_components/lace/src/scss/multientry";
+@import "../../../../bower_components/lace/src/scss/flexbox";
+@import "../../../../bower_components/lace/src/scss/tooltip";
+@import "../../../../bower_components/lace/src/scss/linked";
+@import "../../../../bower_components/lace/src/scss/filter";
+@import "../../../../bower_components/lace/src/scss/dropshadow";
+@import "../../../../bower_components/lace/src/scss/clearfix";
+@import "../../../../bower_components/lace/src/scss/icons";
+@import "../../../../bower_components/lace/src/scss/animations/transition";
+@import "../../../../bower_components/lace/src/scss/animations/appearin";
+
+
+// Import various components
+@import "components/listview";
+@import "components/gridview";
+@import "components/textarea";
+@import "components/fab";
+@import "components/appbar";
+@import "components/searchbar";
+@import "components/card";
+@import "components/sidebar";
+@import "components/chat";
+@import "components/markdown";
+@import "components/settingspage";
+@import "components/scrollto";
+@import "components/banner";
+@import "components/userarea";
+@import "components/calltoactionbar";
+@import "components/connectionstatus";
+@import "components/tip";
+@import "components/footer";
+@import "components/notificationcenter";
+@import "components/requests";
+@import "components/suggestions";
+@import "components/loader";
+@import "components/startthread";
+@import "components/splash";
+
+
+// Initialize grid
+@include grid();
+
+
+// Element styles
+html, body {
+    height: 100%;
+    width: 100%;
+}
+
+body {
+    @include filter((
+                    role: $roles,
+                    permission: $permissions,
+                    embed: $embeds,
+                    mode: $modes,
+                    context: $contexts,
+                    state: $states
+    )); /* show hide elements based on filter */
+}
+
+button {
+    &:focus { outline: 0; }
+}
+
+.app-client {
+    position: relative;
+    height: 100%;
+    width: 100%;
+}
+
+.app-container {
+    @include flexbox;
+    @include flex-direction(row);
+    @include flex-wrap(nowrap);
+    @include align-items(flex-start);
+
+    height: 100%;
+    width: 100%;
+
+    word-wrap: break-word; /* wrap long lines to avoid horizontal scrollbar */
+    overflow: hidden; /* fix overflow in firefox */
+    position: absolute;
+}
+
+.sidebar {
+    @include flex-shrink(0);
+
+    .list-item {
+        &:focus, &:hover { background-color: darken($light-color, 5%); }
+
+        &:active { background-color: darken($light-color, 10%); }
+    }
+
+    &-right {
+        @media #{$screenxxxx}  {
+            .searchbar {
+                @include transition(.3s $easeOutQuad);
+                @include flex-shrink(0);
+
+                color: $light-color;
+                background-color: $accent-color;
+
+                @for $i from 1 through length($palette) {
+                    .color-#{$i - 1} & { background-color: nth($palette, $i); }
+                }
+
+                &-input { background-color: rgba(0,0,0,.1); }
+            }
+        }
+    }
+
+    &-people-list {
+        @include flexbox;
+        @include flex-direction(column);
+        @include flex-wrap(nowrap);
+        @include align-items(flex-start);
+
+        height: 100%;
+        width: 100%;
+    }
+
+    &-content {
+        @include flex-grow(1);
+
+        overflow: auto;
+        width: 100%;
+    }
+
+    .list-section {
+        background-color: transparent;
+        box-shadow: none;
+        border-left-width: 0;
+        border-right-width: 0;
+        border-radius: 0;
+    }
+
+    .list-header { opacity: .5; }
+}
+
+%embed-active {
+    .appbar-title-container {
+        @include transition;
+
+        margin-left: 1em;
+        transform: translate3d(0, 0, 0);
+    }
+}
+
+%embed-inactive {
+    .appbar-title-container { transform: translate3d(0, -100%, 0); }
+
+    .appbar-primary { background-color: $dark-color; }
+
+    .appbar-icon-people { opacity: 0; }
+}
+
+.embed {
+    &-toast, &-canvas {
+        @extend %embed-active;
+
+        &:not(:focus):not(:hover):not(:active) { @extend %embed-inactive; }
+
+        &.mode-room {
+            .appbar-icon-back { display: none; }
+        }
+    }
+
+    &-toast.mode-chat:not(.toast-minimized) {
+        .appbar-title-container { margin-left: 0; }
+    }
+}
+
+.toast-minimized {
+    @extend %embed-inactive;
+
+    .appbar-icon, .user-area { display: none; }
+}
+
+.input-focused {
+    .fab {
+        opacity: 0;
+        pointer-events: none;
+    }
+}
+
+.appbar {
+    &-title-container {
+        position: relative;
+        height: 100%;
+        width: 1em;
+        width: calc(100% - 19em);
+        float: left;
+
+        @media #{$screenx} {
+            width: 2em;
+            width: calc(100% - 19em);
+        }
+
+        @media #{$screenxx} {
+            width: 5em;
+            width: calc(100% - 19em);
+        }
+
+        @media #{$screenxxx} {
+            width: 5em;
+            width: calc(100% - 29em);
+        }
+
+        @media #{$screenxxxx} {
+            width: 11em;
+            width: calc(100% - 29em);
+        }
+
+        @media #{$screenxxxxx} {
+            width: 32em;
+            width: calc(100% - 29em);
+        }
+
+        .appbar-title {
+            height: 100%;
+            width: 100%;
+        }
+
+        .appbar-logotype-primary {
+            position: absolute;
+            left: 0;
+            top: 100%;
+            height: 100%;
+            margin-left: 0;
+        }
+    }
+
+    &-primary {
+        @media #{$screenxxxx} {
+            .appbar-icon-people { display: none; }
+        }
+    }
+
+    .user-area-nick {
+        display: none;
+
+        @media #{$screenxxx} { display: block; }
+    }
+}
+
+.people-list-item {
+    padding: .5em;
+
+    &-avatar {
+        float: left;
+        display: block;
+        margin: .5em;
+        height: $bar-height - 1em;
+        width: $bar-height - 1em;
+        border-radius: 50%;
+        background-color: rgba(0, 0, 0, 0.1);
+    }
+
+    &-nick {
+        line-height: $bar-height;
+        margin: 0 .5em;
+    }
+
+    &-role {
+        opacity: .5;
+
+        &:before { content: "("; }
+
+        &:after { content: ")"; }
+    }
+
+    &-offline { opacity: .7; }
+}
+
+.main {
+    @include flexbox;
+    @include flex-direction(column);
+    @include flex-wrap(nowrap);
+    @include align-items(flex-start);
+    @include flex-grow(1);
+
+    position: relative;
+    height: 100%;
+    overflow: hidden; /* otherwise makes the right sidebar shrink in firefox */
+}
+
+.main-content {
+    @include flex-grow(1);
+
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background-color: darken($light-color, 5%);
+
+    &-inner-wrap {
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+    }
+
+    &-inner {
+        padding: .5em 0;
+        margin-bottom: $bar-height * 2.5;
+
+        .invalid-room & {
+            width: 100%;
+            height: 100%;
+            margin-bottom: 0;
+        }
+
+        @media #{$screenxxx} { padding: 2em; }
+    }
+
+    &-chat {
+        .scroll-to-bottom {
+            position: absolute;
+            top: -6em;
+        }
+    }
+
+    &-threads {
+        .scroll-to-top {
+            position: absolute;
+            top: 0;
+        }
+    }
+}
+
+.grid-item {
+    .mode-room & {
+        $item-width: 32em;
+
+        @media only screen and (min-width: #{$item-width * 2}) { margin: .5em; }
+
+        @for $i from 1 through 10 {
+            @media only screen and (min-width: #{$item-width * $i}) {
+                width: (100% / $i) - 10%;
+                width: calc(#{100% / $i} - 1em);
+            }
+        }
+
+        @media only screen and (min-width: #{$item-width * 11}) { min-width: 21em; }
+    }
+}
+
+.block { display: block; }
+
+.wide { width: 100%; }
+
+.blankslate-area {
+    width: 100%;
+    height: 100%;
+    display: table;
+    table-layout: fixed;
+    padding: 1.5em;
+
+    &-gray { background-color: darken($light-color, 5%); }
+
+    &-inner {
+        display: table-cell;
+        vertical-align: middle;
+        text-align: center;
+        color: fade-out($dark-color, .2);
+    }
+
+    &-image {
+        display: block;
+        margin: auto;
+        max-height: 100%;
+    }
+}
+
+.thread-feed-empty {
+    &.blankslate-area { text-align: left; }
+}
+
+.dialog {
+    z-index: 800;
+
+    > form {
+        textarea, input, button { width: 100%; }
+    }
+
+    &-conf, &-pref {
+        max-width: 100%;
+        max-height: 100%;
+        height: 30em;
+        width: 50em;
+    }
+}
+
+.backdrop { z-index: 700; }
+
+.menu {
+    width: auto;
+
+    &-buttons {
+        padding: 1em;
+
+        button { width: 100%; }
+    }
+
+    &-item {
+        white-space: nowrap;
+
+        &:before {
+            opacity: .7;
+            margin-right: .75em;
+            font-size: 1.2em;
+            vertical-align: -.1em;
+            padding: 0 .2em;
+        }
+    }
+
+    &-userpref { @include icon(configure); }
+
+    &-reportissue { @include icon(info-circled); }
+
+    &-sound-notification-enable { @include icon(audio); }
+
+    &-sound-notification-disable { @include icon(audio-off); }
+
+    &-logout { @include icon(off); }
+}
+
+.popover-action {
+    display: block;
+    padding: .75em 1.25em;
+    border: 0;
+    border-top: 1px solid rgba(0, 0, 0, .1);
+    font-weight: 700;
+    font-size: .9em;
+    text-transform: uppercase;
+    text-align: right;
+    color: currentColor;
+    opacity: .7;
+
+    &:focus, &:hover {
+        background-color: rgba(0, 0, 0, .1);
+        color: currentColor;
+    }
+
+    &:active {
+        background-color: rgba(0, 0, 0, .2);
+        color: currentColor;
+    }
+}
+
+.thread-color {
+    background-color: $accent-color;
+
+    @for $i from 1 through length($palette) {
+        .color-#{$i - 1} & { background-color: nth($palette, $i); }
+    }
+
+    &-dark {
+        background-color: darken($accent-color, 16%);
+
+        @for $i from 1 through length($palette) {
+            .color-#{$i - 1} & { background-color: darken(nth($palette, $i), 16%); }
+        }
+    }
+}
+
+.invalid-room {
+    .fab-thread { display: none; }
+}

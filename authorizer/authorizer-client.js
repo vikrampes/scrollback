@@ -1,82 +1,130 @@
-/* global libsb, $ */
-var formField = require("../lib/formField.js");
-var handleAuthErrors = require('./handleAuthErrors.js');
 
-libsb.on('config-show', function (tabs, next) {
-	var room = tabs.room;
+/* eslint-env browser */
 
-	var guestPermRead = false,
-		guestPermWrite = false,
-		registeredPermRead = false,
-		registeredPermWrite = false,
-		followerPermRead = false,
-		followerPermWrite = false;
+"use strict";
 
-	if (!room.guides) room.guides = {};
-	if (!room.guides.authorizer) room.guides.authorizer = {};
+module.exports = (core, config, store) => {
+	const React = require("react"),
+		  handleAuthErrors = require("./handleAuthErrors.js"),
+		  ToggleGroup = require("../ui/components/toggle-group.js")(core, config, store),
+		  ToggleSwitch = require("../ui/components/toggle-switch.js")(core, config, store);
 
-	if (!room.guides.authorizer.readLevel) room.guides.authorizer.readLevel = 'guest';
-	if (!room.guides.authorizer.writeLevel) room.guides.authorizer.writeLevel = 'guest';
+	class Authorizer extends React.Component {
+		constructor(props) {
+			super(props);
+			this.state = {
+				readLevel: this.props.readLevel,
+				writeLevel: this.props.writeLevel,
+				approvedFollow: !this.props.openRoom
+			};
+		}
 
+		onReadLevelUpdate() {
+			this.setState({ readLevel: this.refs.readLevel.value });
+		}
 
-	var readLevel = room.guides.authorizer.readLevel; // guest, registered, follower
-	var writeLevel = room.guides.authorizer.writeLevel;
+		onWriteLevelUpdate() {
+			this.setState({ writeLevel: this.refs.writeLevel.value });
+		}
 
-	switch (readLevel) {
-	case 'guest':
-		guestPermRead = true;
-		break;
-	case 'registered':
-		registeredPermRead = true;
-		break;
-	case 'follower':
-		followerPermRead = true;
+		onApprovedFollowUpdate() {
+			this.setState({ approvedFollow: this.refs.approvedFollow.checked });
+		}
+
+		render() {
+			var readLevelItems = [
+					{ value: "guest", label: "Anyone" },
+					{ value: "registered", label: "Logged in" },
+					{ value: "follower", label: "Followers"}
+				],
+				writeLevelItems = [
+					{ value: "guest", label: "Anyone" },
+					{ value: "registered", label: "Logged in" },
+					{ value: "follower", label: "Followers"}
+				];
+
+			for (const item of writeLevelItems) {
+				if (item.value === this.state.readLevel) {
+					break;
+				}
+
+				if (this.state.writeLevel === item.value) {
+					this.state.writeLevel = this.state.readLevel;
+				}
+
+				item.disabled = true;
+			}
+
+			return (
+				<div>
+					<div className="settings-item">
+						<div className="settings-label">Who can read messages?</div>
+						<div className="settings-action">
+							<ToggleGroup ref="readLevel" className="toggle-group" name="readLevel" items={readLevelItems}  value={this.state.readLevel} onUpdate={this.onReadLevelUpdate.bind(this)}/>
+						</div>
+					</div>
+					<div className="settings-item">
+						<div className="settings-label">Who can write messages?</div>
+						<div className="settings-action">
+							<ToggleGroup ref="writeLevel" className="toggle-group" name="writeLevel" items={writeLevelItems}  value={this.state.writeLevel} onUpdate={this.onWriteLevelUpdate.bind(this)}/>
+						</div>
+					</div>
+					<div className="settings-item">
+						<div className="settings-label">Approval required to follow</div>
+						<div className="settings-action">
+							<ToggleSwitch ref="approvedFollow" checked={this.state.approvedFollow} onUpdate={this.onApprovedFollowUpdate.bind(this)}/>
+						</div>
+					</div>
+				</div>
+			);
+		}
+
+		onSave(room) {
+			room.guides.authorizer = {
+				readLevel: this.refs.readLevel.value,
+				writeLevel: this.refs.writeLevel.value,
+				openRoom: !this.refs.approvedFollow.checked
+			};
+		}
+
+		componentDidMount() {
+			this.saveHandler = this.onSave.bind(this);
+			core.on("conf-save", this.saveHandler, 500);
+		}
+
+		componentWillUnmount() {
+			core.off("conf-save", this.saveHandler);
+		}
 	}
 
-	switch (writeLevel) {
-	case 'guest':
-		guestPermWrite = true;
-		break;
-	case 'registered':
-		registeredPermWrite = true;
-		break;
-	case 'follower':
-		followerPermWrite = true;
-	}
-
-	var div = $('<div>').append(
-		//		formField('Who can read messages?', 'radio', "authorizer-read",[['authorizer-read-guest', 'Anyone (Public)', guestPermRead], ['authorizer-read-users', 'Logged in users', registeredPermRead], ['authorizer-read-followers', 'Followers', followerPermRead]]),
-		formField('Who can post messages?', 'radio', "authorizer-write", [['authorizer-post-guest', 'Anyone (Public)', guestPermWrite], ['authorizer-post-users', 'Logged in users', registeredPermWrite], ['authorizer-post-followers', 'Followers', followerPermWrite]])
-	);
-
-	tabs.authorizer = {
-		html: div,
-		text: "Permissions",
-		prio: 700
+	Authorizer.propTypes = {
+		readLevel: React.PropTypes.string.isRequired,
+		writeLevel: React.PropTypes.string.isRequired,
+		openRoom: React.PropTypes.bool.isRequired
 	};
-	next();
-}, 500);
 
-libsb.on('config-save', function (room, next) {
-	var mapRoles = {
-		guest: 'guest',
-		users: 'registered',
-		followers: 'follower'
-	};
-	var readLevel = 'guest'; //mapRoles[$('input:radio[name="authorizer-read"]:checked').attr('id').substring(16)];
-	var writeLevel = mapRoles[$('input:radio[name="authorizer-write"]:checked').attr('id').substring(16)];
-	if (!room.guides) room.guides = {};
+	core.on("conf-show", tabs => {
+		let guides = tabs.room.guides,
+			container = document.createElement("div"),
+			readLevel = (guides && guides.authorizer && guides.authorizer.readLevel) ? guides.authorizer.readLevel : "guest",
+			writeLevel = (guides && guides.authorizer && guides.authorizer.writeLevel) ? guides.authorizer.writeLevel : "guest",
+			openRoom = (guides && guides.authorizer && typeof guides.authorizer.openRoom === "boolean") ? guides.authorizer.openRoom : true;
 
-	room.guides.authorizer = {
-		readLevel: readLevel,
-		writeLevel: writeLevel
-	};
-	next();
-}, 500);
+		React.render(<Authorizer readLevel={readLevel} writeLevel={writeLevel} openRoom={openRoom}/>, container);
 
-libsb.on('error-dn', function (error, next) {
-	if (error.message === "ERR_NOT_ALLOWED") {
-		handleAuthErrors(error);
-	}
-	next();
-}, 1000);
+		tabs.authorizer = {
+			text: "Permissions",
+			html: container
+		};
+	}, 800);
+
+	core.on("error-dn", error => {
+		var errorActions = [ "admit", "expel", "edit", "part", "room", "user" ];
+
+		if (error.message === "ERR_NOT_ALLOWED" && errorActions.indexOf(error.action) > -1) {
+			handleAuthErrors(error);
+			error.handled = true;
+		}
+	}, 1000);
+
+};

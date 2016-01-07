@@ -51,6 +51,8 @@ function joinChannels(server, nick, channels, cb) {
 function joinServer(server, nick, channels, options, cb) {
 	if (!clients[nick]) clients[nick] = {};
 	var displayNick = nick.indexOf('guest-') === 0 ? nick.substring(6) : nick;
+	var webIrcPassword = config.webirc[server];
+	log("password=", webIrcPassword);
 	var client = new irc.Client(server, displayNick, {
 		userName: displayNick,
 		realName: nick + '@scrollback.io',
@@ -61,13 +63,14 @@ function joinServer(server, nick, channels, options, cb) {
 		floodProtection: true,
 		identId: options.identId,
 		//showErrors: true,
-		webircPassword: options.webircPassword,
+		webircPassword: webIrcPassword,
 		userIp: options.userIp,
 		userHostName: options.userHostName
 	});
 	clients[nick][server] = client;
 	client.conn.on("connect", cb);
 	onError(client);
+	onPrivateMessage(client);
 	return client;
 }
 /**
@@ -75,6 +78,8 @@ function joinServer(server, nick, channels, options, cb) {
  *opt.identId is used for ident.
  */
 function connectBot(room, options, cb) {
+	options.userIp = config.myIP; // send it as webIRC header.
+	options.userHostName = config.host;
 	console.log("Connect Bot ", room, options);
 	options.autoRejoin = false;
     var server = room.params.irc.server;
@@ -91,7 +96,7 @@ function connectBot(room, options, cb) {
 	servChanProp[server][channel].users = [];
 	rooms[room.id] = room;
 	servChanProp[server][channel].room = room;
-    
+
 	var ch = room.params.irc.pending ? [] : [channel]; //after varification connect to channel
 	if (!servNick[server]) servNick[server] = {};
 	var client;
@@ -116,6 +121,7 @@ function partBot(roomId, callback) {
 	log("****part bot for room ", roomId, room);
 	if (!room) return callback(); //should throw an error? not sure...
 	var client = clients[botNick][room.params.irc.server];
+	if (!client) return callback();
 	var channel = room.params.irc.channel;
 	var server = room.params.irc.server;
 	var pending = room.params.irc.pending;
@@ -156,6 +162,20 @@ function connectUser(roomId, nick, options, cb) {
 	var server = room.params.irc.server;
 	var channel = room.params.irc.channel;
 	var client;
+	function userLeft(channel, nick) {
+		log("connect bot", arguments);
+		channel = channel.toLowerCase();
+		log("got user left", arguments, client.nick, client.channels);
+		if ( client.nick === nick) {
+			client.channels.splice(client.channels.indexOf(channel), 1);
+		}
+		if (client.channels.length === 0) {
+			log("part channel", nick, arguments);
+			client.disconnect();
+			log("disconnecting user", client.nick);
+			delete clients[client.sbNick][client.opt.server];
+		}
+	}
 	if (!clients[nick]) clients[nick] = {};
 	if (clients[nick][server]) {
 		client = joinChannels(server, nick, [channel], cb);
@@ -164,28 +184,14 @@ function connectUser(roomId, nick, options, cb) {
 		client = joinServer(server, nick, [channel], options, cb);
 		client.channels = [];
         client.sbNick = nick;
-		client.once('registered', function (message) {
+		client.once('registered', function () {
 			if (!servNick[client.opt.server]) servNick[client.opt.server] = {};
 			servNick[client.opt.server][client.nick] = {
 				nick: client.sbNick,
 				dir: "out"
 			};
 		});
-        
-        function userLeft(channel, nick) {
-            log("connect bot", arguments);
-            channel = channel.toLowerCase();
-            log("got user left", arguments, client.nick, client.channels);
-            if ( client.nick === nick) {
-                 client.channels.splice(client.channels.indexOf(channel), 1);
-            }
-            if (client.channels.length === 0) {
-				log("part channel", nick, arguments);
-				client.disconnect();
-                log("disconnecting user", client.nick);
-				delete clients[client.sbNick][client.opt.server];
-			}
-        }
+
         client.on("part", function (channel, nick) {
             log("connect bot", arguments);
             userLeft(channel, nick);
@@ -225,7 +231,7 @@ function onMessage(client) {
 			});
 		}
 	}
-	client.on('message#', function (nick, to, text, message) {
+	client.on('message#', function (nick, to, text) {
 		log("on message" /*, JSON.stringify(servNick)*/ );
 		msg(nick, to, text);
 	});
@@ -255,7 +261,7 @@ function sendMessage(server, from, to, text, time) {
 }
 
 function onInvite(client) {
-	client.on('invite', function (channel, from, message) {
+	client.on('invite', function (channel) {
 		channel = channel.toLowerCase();
 		var server = client.opt.server;
 		if (servChanProp[server][channel]) {
@@ -291,23 +297,27 @@ function sendRoom(room, pending) {
  */
 function onLeave(client) {
 
-	client.on("part", function (channel, nick, reason, message) {
+	client.on("part", function (channel, nick) {
 		left(client, [channel], nick);
 	});
 
-	client.addListener('kill', function (nick, reason, channels, message) { //TODO see if autoconnect after kill
+	client.addListener('kill', function (nick, reason, channels) {
+		if (client.nick === nick) {//scrollback bot
+			log.e("bot got killed on server: " + client.opt.server, JSON.stringify(arguments));
+		} else left(client, channels, nick);
+	});
+
+	client.addListener('quit', function (nick, reason, channels) {
 		left(client, channels, nick);
 	});
 
-	client.addListener('quit', function (nick, reason, channels, message) {
-		left(client, channels, nick);
-	});
-
-	client.addListener('kick', function (channel, nick, by, reason, message) {
+	client.addListener('kick', function (channel, nick, by, reason) {
 		log("Kick: ", arguments);
 		var server = client.opt.server;
 		if (nick === client.nick) {
 			var room = servChanProp[server][channel].room;
+			if (!room) return;
+			log.e("Bot " + nick + " is kicked from channel " + channel + " by " + by + " because of " + reason + " room: " + room.id);
 			var users = servChanProp[server] && servChanProp[server][channel] && servChanProp[room.params.irc.server][channel].users;
 			if (users) users.forEach(function (user) {
 				if (servNick[server][user].dir === 'out') {
@@ -471,7 +481,7 @@ function onNick(client) {
 				addUsers(client, channel, newNick);
 			});
 		} else {
-			channels.forEach(function (channel) {
+			channels.forEach(function () {
 				servNick[client.opt.server][newNick] = {
 					nick: renameCallback.newNick,
 					dir: "out"
@@ -485,7 +495,7 @@ function onNick(client) {
 }
 
 function onJoin(client) {
-	client.on('join', function (channel, nick, message) {
+	client.on('join', function (channel, nick) {
 		addUsers(client, channel, nick);
 	});
 }
@@ -650,5 +660,12 @@ function onError(client) {
 			server: client.opt.server,
 			message: message
 		});
+	});
+}
+
+function onPrivateMessage(client) {
+	client.on("pm", function(nick, text, message) {
+		log("Private Message: ", nick, text, message);
+		client.say(nick, "Hey " + nick + ", I am using a web client that doesn't support PMs. Try reaching me on the channel.");
 	});
 }

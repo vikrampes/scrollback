@@ -1,54 +1,33 @@
+"use strict";
+
 var SbError = require('../../lib/SbError.js');
-var permissionLevels = require('../permissionWeights.js');
-var config = require('../../myConfig.js');
-var internalSession = Object.keys(config.whitelists)[0];
-module.exports = function (core) {
-	core.on('getTexts', function (query, callback) {
-		if (query.user.role === "none") {
-			if (/^guest-/.test(query.user.id)) {
-				query.user.role = "guest";
-			} else {
-				query.user.role = "registered";
-			}
+var sessionUtils = require('../../lib/session-utils.js');
+var log = require('./../../lib/logger.js');
+
+module.exports = function(core) {
+	core.on('getRooms', function(query, next) {
+		if (sessionUtils.isInternalSession(query.session)) return next();
+		var isFull = true,
+			split;
+
+		if (query.identity) {
+			split = query.identity.split(":");
+			if (!split[1] || !split[1].length) isFull = false;
 		}
-		if (!query.room.guides || !query.room.guides.authorizer || !query.room.guides.authorizer.readLevel) return callback();
-		if (query.room.guides || typeof query.room.guides.authorizer.readLevel === 'undefined') query.room.guides.authorizer.readLevel = 'guest';
-		if (permissionLevels[query.room.guides.authorizer.readLevel] <= permissionLevels[query.user.role]) return callback();
-		else return callback(new SbError('ERR_NOT_ALLOWED', {
-			source: 'authorizer',
-			action: 'getTexts',
-			requiredRole: query.room.guides.authorizer.readLevel,
-			currentRole: query.user.role
-		}));
-	}, "authorization");
-	core.on('getThreads', function (query, callback) {
-		var readLevel;
-		if (query.user.role === "none") {
-			if (/^guest-/.test(query.user.id)) {
-				query.user.role = "guest";
-			} else {
-				query.user.role = "registered";
-			}
+
+		if (query.identity && !isFull && query.user.role !== 'su' && !/^internal/.test(query.session)) {
+			return next(new SbError('ERR_NOT_ALLOWED')); // prob not a good idea to send requiredRole as superuser to client :)
 		}
-		if (query.q && !query.room) {
-			return callback();
-		}
-		readLevel = (query.room.guides && query.room.guides.authorizer && query.room.guides.authorizer.readLevel) || 'guest';
-		if (permissionLevels[readLevel] <= permissionLevels[query.user.role]) return callback();
-		else return callback(new SbError('ERR_NOT_ALLOWED', {
-			source: 'authorizer',
-			action: 'getThreads',
-			requiredRole: query.room.guides.authorizer.readLevel,
-			currentRole: query.user.role
-		}));
+
+		next();
 	}, "authorization");
 
-    ['getRooms', 'getUsers'].forEach(function (e) {
-		core.on(e, function (query, next) {
-			if (query.identity && query.user.role !== 'su' && query.session !== internalSession) {
-				next(new SbError('ERR_NOT_ALLOWED')); // prob not a good idea to send requiredRole as superuser to client :)
-			} else next();
-		}, "authorization");
-	});
+	core.on('getUsers', function(query, next) {
+		log.d("GetUsers", query);
+		if (sessionUtils.isInternalSession(query.session)) return next();
+		if (query.identity && query.user.role !== 'su' && !sessionUtils.isInternalSession(query.session)) {
+			next(new SbError('ERR_NOT_ALLOWED')); // prob not a good idea to send requiredRole as superuser to client :)
+		} else next();
+	}, "authorization");
 
 };

@@ -1,3 +1,4 @@
+"use strict";
 /*
 	Scrollback: Beautiful text chat for your community.
 	Copyright (c) 2014 Askabt Pte. Ltd.
@@ -18,38 +19,45 @@ or write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330,
 Boston, MA 02111-1307 USA.
 */
 
-var express = require("./express.js"),
-	socket = require("./socket.js"),
-	log = require("../lib/logger.js"),
-	plugins = require('./plugins.js'),
-	page=require("./page.js"),
-	app = express.init();
+function init(core, config) {
+	var express = require("./express.js")(core, config),
+		socket = require("./socket.js")(core, config),
+		plugins = require("./plugins.js")(core, config),
+		page = require("./page.js")(core, config),
+		app = express.init();
 
-var init = function(core) {
-	socket.initCore(core);
 	socket.initServer(app.httpServer);
-	if(app.httpsServer) socket.initServer(app.httpsServer, core);
-	plugins.init(app, core);
-	page.init(app, core);
 
-};
+	if (app.httpsServer) {
+		socket.initServer(app.httpsServer);
+	}
 
-module.exports = function(core){
-	init(core);
-	var send = socket.send;
-	var emit = socket.emit;
+	plugins.init(app);
+	page.init(app);
+}
 
+module.exports = function(core, config) {
+	init(core, config);
 
-	core.on("room", function(action, callback) {
+	core.on("room", function(action, next) {
+		if (action.room.params.http && typeof action.room.params.http.seo !== "boolean") {
+			return next(new Error("ERR_INVAILD_PARAMS"));
+		}
 
-		if(action.room.params.http && typeof action.room.params.http.seo !== "boolean") return callback(new Error("ERR_INVAILD_PARAMS"));
-		callback();
-	}, 'appLevelValidation');
+		next();
+	}, "appLevelValidation");
 
-	core.on("user", function(action, callback) {
-		if(!action.user.params.notifications) return callback();
-		if(typeof action.user.params.notifications.sound !== "boolean") return callback(new Error("ERR_INVAILD_PARAMS"));
-		if(typeof action.user.params.notifications.desktop !== "boolean") return callback(new Error("ERR_INVAILD_PARAMS"));
-		callback();
-	}, 'appLevelValidation');
+	core.on("user", function(action, next) {
+		if (!action.user.params.notifications) return next();
+
+		if ([ "undefined", "boolean" ].indexOf(typeof action.user.params.notifications.sound) === -1) {
+			return next(new Error("ERR_INVAILD_PARAMS"));
+		}
+
+		if ([ "undefined", "boolean" ].indexOf(typeof action.user.params.notifications.desktop) === -1) {
+			return next(new Error("ERR_INVAILD_PARAMS"));
+		}
+
+		next();
+	}, "appLevelValidation");
 };

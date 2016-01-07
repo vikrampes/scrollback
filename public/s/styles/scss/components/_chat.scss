@@ -1,0 +1,256 @@
+@include exports(chat) {
+    @include keyframes(uploadprogress) {
+        0% {
+            transform: rotate(0);
+            stroke-dashoffset: 0;
+        }
+
+        50% { transform: rotate(180deg); }
+
+        75% { stroke-dashoffset: -100; }
+
+        100% {
+            transform: rotate(360deg);
+            stroke-dashoffset: -200;
+        }
+    }
+
+
+    .chat-area {
+        @include flexbox;
+        @include flex-direction(column);
+        @include flex-wrap(nowrap);
+        @include align-items(flex-start);
+
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+        margin-top: $bar-height * -1;
+        padding-top: $bar-height;
+
+        .flex-available & {
+            @include align-items(flex-end);
+
+            margin-top: 0;
+            padding-top: 0;
+
+            &:before {
+                @include flex-grow(1);
+                @include flex-shrink(1);
+
+                content: "";
+            }
+        }
+
+        &-empty {
+            @include flex-grow(1);
+
+            width: 100%;
+            text-align: center;
+        }
+
+        &-messages {
+            @include flex-grow(1);
+
+            width: 100%;
+            overflow: auto;
+            -webkit-overflow-scrolling: touch;
+
+            @media #{$screenxxxx} { padding: 1em 3em; }
+
+            .flex-available & { @include flex-grow(0); }
+        }
+
+        &-actions {
+            @include flex-shrink(0);
+
+            position: relative;
+            width: 100%;
+        }
+
+        &-input {
+            position: relative;
+            width: 100%;
+            box-shadow: 0 -1.5px 3px rgba(0, 0, 0, .12);
+
+            .suggestions-list {
+                border-top: 1px solid rgba(0, 0, 0, .2);
+                border-radius: 0;
+            }
+
+            .textarea-container { border: 0; }
+
+            &-inner {
+                width: 100%;
+                min-height: $bar-height;
+                max-height: 12em;
+                overflow: auto;
+                word-wrap: break-word;
+            }
+
+            &-entry {
+                @extend %entry;
+
+                border-width: 1px 0 0;
+                border-color: rgba(0, 0, 0, .16);
+                border-radius: 0;
+                padding: 1em;
+                padding-right: 4em;
+
+                &:focus, &:hover, &:active {
+                    @for $i from 1 through length($palette) {
+                        .color-#{$i - 1} & { border-color: nth($palette, $i); }
+                    }
+                }
+
+                @media #{$screenxxxx} { padding: 1em 4em; }
+            }
+
+            &-actions {
+                position: absolute;
+                right: 0;
+                bottom: 0;
+                height: ($bar-height / 1.5);
+                display: block;
+                font-size: 1.5em;
+                line-height: 1;
+            }
+
+            &-action {
+                @extend %snappy;
+
+                float: left;
+                padding: (1em / 1.5) (1.125em / 1.5);
+                cursor: pointer;
+            }
+
+            &-send {
+                @include icon(right-big);
+
+                display: block;
+
+                @for $i from 1 through length($palette) {
+                    .color-#{$i - 1} & { color: nth($palette, $i); }
+                }
+
+                .chat-area-input.empty & { display: none; }
+            }
+
+            &-image {
+                @extend %transition;
+                @include icon(image);
+
+                position: relative;
+                display: none;
+                height: 100%;
+                width: 2.5em;
+                opacity: .7;
+
+                &:focus, &:hover, &:active { opacity: 1; }
+
+                .loader {
+                    position: absolute;
+                    top: .41em;
+                    left: .5em;
+                }
+
+                .chat-area-input.empty & { display: block; }
+            }
+        }
+    }
+
+    .chat-item {
+        $spacing-left-mobile: 5em;
+        $spacing-left-normal: 12em;
+
+        @extend %clearfix;
+
+        padding: .75em 1em;
+
+        @media #{$screenxxx} {
+            padding-left: $spacing-left-normal;
+            border-radius: $roundness;
+        }
+
+        &.error { background-color: fade-out($error-color, .95); }
+
+        &.popover-active, &:active { background-color: rgba(0,0,0,0.05); }
+
+        &-nick {
+            float: left;
+            font-weight: 700;
+            margin-right: 1em;
+            opacity: .8;
+
+            &:after {
+                content: ":";
+                margin-left: .25em;
+                opacity: .5;
+            }
+
+            @media #{$screenxxx} {
+                margin-left: 1em - $spacing-left-normal;
+
+                &:after { display: none; }
+            }
+        }
+
+		&-continues { padding-bottom: .25em; }
+
+		&-continuation { padding-top: .25em; }
+
+        &-message {
+            @media #{$screenxxx} { display: inline; }
+        }
+
+        &-error {
+            color: $error-color;
+            font-style: italic;
+        }
+
+        &-timestamp, &-error {
+            float: right;
+            opacity: 0.5;
+            padding-left: 1em;
+            font-size: .9em;
+        }
+
+        &-tag {
+            &-failed {
+                color: $error-color;
+                font-style: italic;
+            }
+
+            &-hidden {
+                font-style: italic;
+                opacity: .5;
+
+                body:not(.role-owner) & {
+                    // display: none gives javascript undefined offsets
+                    height: 0;
+                    padding: 0;
+                    margin: 0;
+                    border: 0;
+                    overflow: hidden;
+                }
+            }
+
+            &-action {
+                color: lighten($dark-color, 5%);
+                border-right: 2px solid $accent-color;
+                font-style: italic;
+
+                .chat-item-nick {
+                    font-weight: 400;
+                    padding-right: .25em;
+                    margin-right: 0;
+                    color: lighten($dark-color, 5%);
+
+                    &:after { content: ""; }
+
+                    @media #{$screenxxx} { margin-left: 0; }
+                }
+            }
+        }
+    }
+}

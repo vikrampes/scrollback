@@ -1,101 +1,50 @@
-/* jshint browser: true */
-/* global $, libsb */
+/* eslint-env browser */
 
-//var formField = require("../lib/formField.js");
+"use strict";
 
-$(function() {
-//	libsb.on("config-show", function(tabs, next) {
-//		var results = tabs.room;
-//
-//		if (!results.guides) {
-//			results.guides = {};
-//		}
-//
-//		if (!results.guides.customization) {
-//			results.guides.customization = {};
-//		}
-//
-//		if (!results.guides.customization.css) {
-//			results.guides.customization.css = "";
-//		}
-//
-//		var $div = $("<div>").append(formField("Custom CSS", "area", "custom-css", results.guides.customization.css));
-//
-//		tabs.customization = {
-//			text: "Customization",
-//			html: $div,
-//			prio: 300
-//		};
-//
-//		next();
-//	}, 500);
-//
-//	libsb.on("config-save", function(room, next){
-//		if (!room.guides.customization) {
-//			room.guides.customization = {};
-//		}
-//
-//		room.guides.customization.css = $("#custom-css").val().replace("<", "\\3c").replace(">", "\\3e");
-//
-//		next();
-//	}, 500);
+module.exports = (core, config, store) => {
+	let customStyle = {
+		removeCss: function() {
+			let styleSheet = document.getElementById("scrollback-custom-css");
 
-	libsb.on("navigate", function(state, next) {
-		if (state.old && state.roomName !== state.old.roomName && typeof state.room == "object") {
-			customStyle.applyCss();
-		}
-		next();
-	}, 700);
-
-	libsb.on("room-dn", function(room, next) {
-		customStyle.applyCss();
-
-		next();
-	}, 100);
-
-	// Customization API (temporary)
-	var customStyle = {
-		setCss: function(customCss) {
-			var room = $.extend({}, window.currentState.room),
-				roomObj;
-
-			if (!(room && typeof customCss === "string")) {
-				return;
+			if (styleSheet && document.head.contains(styleSheet)) {
+				document.head.removeChild(styleSheet);
 			}
-
-			if (!room.guides) {
-				room.guides = {};
-			}
-
-			if (!room.guides.customization) {
-				room.guides.customization = {};
-			}
-
-			room.guides.customization.css = customCss.replace("<", "\\3c").replace(">", "\\3e");
-
-			roomObj = { to: window.currentState.roomName, room: room };
-
-			libsb.emit("room-up", roomObj);
 		},
 
 		applyCss: function() {
-			var room = window.currentState.room,
-				customization;
+			this.removeCss();
 
-			if (!room || !room.guides || !room.guides.customization) {
+			let roomObj = store.getRoom();
+
+			if (!(roomObj && roomObj.guides && roomObj.guides.customization && roomObj.guides.customization.css)) {
 				return;
 			}
 
-			customization = room.guides.customization;
+			let styleSheet = document.createElement("style");
 
-			$("#scrollback-custom-style").remove();
+			styleSheet.setAttribute("id", "scrollback-custom-css");
 
-			if (customization && customization.css) {
-				$("<style>").text(customization.css)
-				.attr("id", "scrollback-custom-style").appendTo("head");
-			}
+			styleSheet.appendChild(document.createTextNode("")); // fix webkit not recognizing styles
+
+			document.head.appendChild(styleSheet);
+
+			styleSheet.appendChild(document.createTextNode(roomObj.guides.customization.css.replace("<", "\\3c").replace(">", "\\3e")));
 		}
 	};
 
-	window.customStyle = customStyle;
-});
+	core.on("statechange", changes => {
+		let roomId = store.get("nav", "room");
+
+		if ((changes.nav && ("room" in changes.nav || "mode" in changes.nav)) || (changes.entities && roomId in changes.entities)) {
+			let mode = store.get("nav", "mode"),
+				thread = store.get("nav", "thread");
+
+			if (mode === "room" || (mode === "chat" && !thread)) {
+				customStyle.applyCss();
+			} else {
+				customStyle.removeCss();
+			}
+		}
+	}, 100);
+};

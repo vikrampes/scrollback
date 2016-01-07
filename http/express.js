@@ -18,27 +18,54 @@ or write to the Free Software Foundation, Inc., 59 Temple Place, Suite 330,
 Boston, MA 02111-1307 USA.
 */
 
-var express = require("express"),
-	http = require("http"), https = require("https"),
-	fs = require("fs"),
-	config = require("../config.js"),
-	session = require("./session.js");
+"use strict";
 
-exports.init = function() {
-	var app = express(), srv, srvs;
+var express = require("express"),
+	http = require("http"),
+	https = require("https"),
+	fs = require("fs"),
+	config;
+
+function init() {
+	var app = express(),
+		srv, srvs, appcached;
+
+	try {
+		appcached = fs.readFileSync(__dirname + "/../public/manifest.appcache").toString().split(/\n/).filter(function(u) {
+			// Ignore empty lines, comments and headers
+			return u.length && !/(^#|^[A-Z]+:$)/.test(u);
+		});
+	} catch (e) {
+		appcached = [];
+	}
 
 	app.set('views', __dirname + '/views');
 	app.set('view engine', 'jade');
 	app.set('view options', { debug: true });
 
-	/**
-	* We need to serve the correct mimetype for the manifest.appcache file.
-	* Even though latest browsers don't require this, older versions of browsers do.
-	* Also, we need to make sure that the manifest.appcache is not cached.
-	*/
 	app.use(function(req, res, next) {
-		if((req.url).match(/.*\.appcache$/)) {
+		if (
+			/^okhttp\/*/.test(req.headers["user-agent"]) ||
+			(req.headers["x-requested-with"] && /^io.scrollback.neighborhoods.*/.test(req.headers["x-requested-with"])) && 
+			config.global.host === "scrollback.io"
+		   ) {
+			return res.redirect(301, "https://heyneighbor.chat" + req.originalUrl);
+		}
+
+		if (req.path.match(/.*\.appcache$/)) {
+			// We need to serve the correct mimetype for the manifest.appcache file.
+			// Even though latest browsers don't require this, older versions of browsers do.
+			// Firefox doesn't use appcache if we add Cache-Control: no-cache.
 			res.header('Content-Type', 'text/cache-manifest');
+			res.header('Expires', new Date(Date.now() + 86400000).toUTCString());
+			res.header('Pragma', 'no-cache');
+		} else if (appcached.indexOf(req.path) > -1) {
+			// Firefox doesn't load latest resources if we don't do this.
+			res.header('Cache-Control', 'no-cache');
+		}
+
+		// Disable cache for sourcemap files
+		if (req.path.match(/.*\.map$/)) {
 			res.header('Cache-Control', 'private, no-cache, no-store, must-revalidate');
 			res.header('Expires', '0');
 			res.header('Pragma', 'no-cache');
@@ -49,28 +76,39 @@ exports.init = function() {
 
 	app.use(express.logger("AA/HTTP - [:date] :method :url :referrer :user-agent :status"));
 	app.use(express.compress());
-	app.use(express["static"](__dirname + "/../" + config.http.home, { maxAge: 86400000 }));
+	app.use(express.static(__dirname + "/../" + config.home, {
+		maxAge: 86400000
+	}));
+
+	if (process.env.NODE_ENV !== "production") {
+		app.use(express.static(__dirname + '/../test/public'));
+	}
 
 	app.use(express.cookieParser());
-	// app.use(session.parser);
 	app.use(express.query());
 	app.use(express.bodyParser());
 
 	srv = http.createServer(app);
 
-	srv.listen(config.http.port);
+	srv.listen(config.port);
 	app.httpServer = srv;
 
-	if (config.http.https) {
+	if (config.https) {
 		srvs = https.createServer({
-			key: fs.readFileSync(__dirname + "/../" + config.http.https.key),
-			cert: fs.readFileSync(__dirname + "/../" + config.http.https.cert),
-			ca : !config.http.https.ca || fs.readFileSync(__dirname + "/../" + config.http.https.ca)
+			key: fs.readFileSync(__dirname + "/../" + config.https.key),
+			cert: fs.readFileSync(__dirname + "/../" + config.https.cert),
+			ca: !config.https.ca || fs.readFileSync(__dirname + "/../" + config.https.ca)
 		}, app);
-		srvs.listen(config.http.https.port);
+		srvs.listen(config.https.port);
 		app.httpsServer = srvs;
 	}
 
 	return app;
-};
+}
 
+module.exports = function(core, conf) {
+	config = conf;
+	return {
+		init: init
+	};
+};

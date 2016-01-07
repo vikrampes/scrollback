@@ -1,45 +1,79 @@
-var config = require("../config.js"),
-	log = require("../lib/logger.js"),
-	crypto = require('crypto'),
-	request = require("request"), core,
-	internalSession = Object.keys(config.whitelists)[0];
+"use strict";
 
-module.exports = function(c) {
-	core = c;
-	core.on("init", browserAuth, "authentication");
-};
+var config, log = require("../lib/logger.js"),
+	crypto = require('crypto'),
+	request = require("request"),
+	core;
 
 function browserAuth(action, callback) {
 	var assertion;
-	if(!action.auth || !action.auth.browserid) return callback();
+	if (action.response || !action.auth || !action.auth.browserid) return callback();
 	assertion = action.auth.browserid;
-	request.post("https://verifier.login.persona.org/verify", { form: {
-		assertion: assertion,
-		audience: config.auth.audience
-	}}	, function(err, res, body) {
+
+	log.d("assertion", assertion, config);
+	request.post("https://verifier.login.persona.org/verify", {
+		form: {
+			assertion: assertion,
+			audience: config.audience
+		}
+	}, function(err, res, body) {
 		var identity;
-		if(err) return callback(new Error("AUTH_FAIL_NETWORK/" + err.message));
+		log.d("persona response:", err, res, body);
+		if (err) {
+			action.response = new Error("AUTH_FAIL_NETWORK/" + err.message);
+			return callback();
+		}
 		try {
 			body = JSON.parse(body);
-		} catch(e) {
-            log("Network failure");
-			return callback(new Error("AUTH_FAIL_SERVER/" + body));
+		} catch (e) {
+			action.response = new Error("AUTH_FAIL_SERVER/" + body);
+			return callback();
 		}
-		if(body.status !== 'okay') {
-			return callback(new Error("AUTH_FAIL/" + body.reason));
+
+		if (body.status !== 'okay') {
+			action.response = new Error("AUTH_FAIL/" + body.reason);
+			return callback();
 		}
+
 		identity = "mailto:" + body.email;
-		core.emit("getUsers",{identity: identity, session: internalSession}, function(err, user) {
-			if(err) return callback(new Error("AUTH_FAIL_DATABASE/" + err.message));
-			if(!user.results || user.results.length === 0) {
+		log.d("Email id:", body.email);
+		core.emit("getUsers", {
+			identity: identity,
+			session: "internal-browserid-auth"
+		}, function(e, user) {
+			log.d(e, user);
+			if(e) return callback(e);
+
+			if (!user.results || user.results.length === 0) {
+				action.old = action.user;
 				action.user = {};
-				action.user.identities = [identity];
-                action.user.picture = 'https://gravatar.com/avatar/' + crypto.createHash('md5').update(body.email).digest('hex') + '/?d=monsterid';
+				action.user.id = action.old.id;
+				action.user.type = "user";
+				action.user.identities = action.old.identities || [];
+				action.user.picture = 'https://gravatar.com/avatar/' + crypto.createHash('md5').update(body.email).digest('hex') + '/?d=retro';
+				action.user.params = action.old.guides || {};
+				action.user.guides = action.old.params || {};
+				action.user.params.pictures = [action.user.picture];
+                action.response = new Error("AUTH:UNREGISTERED");
+				log.d("Signup happening:", action);
+				action.user.identities.push(identity);
 				return callback();
 			}
-			action.old = action.user;
+
+			if (action.user.id !== user.results[0].id) {
+				action.old = action.user;
+			} else {
+				action.old = {};
+			}
+
 			action.user = user.results[0];
 			callback();
 		});
 	});
 }
+
+module.exports = function(c, conf) {
+	core = c;
+	config = conf;
+	core.on("init", browserAuth, "authentication");
+};

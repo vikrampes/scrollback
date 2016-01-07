@@ -1,60 +1,80 @@
-var config = require('../config.js');
-var log = require("../lib/logger.js");//.tag("mail");
-var fs=require("fs"),jade = require("jade");
-var emailConfig = config.email;
-var welcomeEmailJade;
-var core;
-var send = require('./sendEmail.js');
+"use strict";
+var log = require("../lib/logger.js"),
+	send = require("./sendEmail.js"),
+	jwt = require("jsonwebtoken"),
+	fs = require("fs"),
+	handlebars = require("handlebars"),
+	config, defaultTemplate,
+	userUtils = require('../lib/user-utils.js');
 
 /**
- * It is used to Send Email
+ * send welcome mail to user
+ *@param {Object} user
+ */
+
+function sendWelcomeEmail(user, origin) {
+	function useTemplate(template) {
+		var emailAdd = false, i;
+
+		for (i = 0; i < user.identities.length; i++) {
+			if (user.identities[i].indexOf("mailto:") === 0) {
+				emailAdd = user.identities[i].substring(7);
+				break;
+			}
+		}
+		var emailHtml = template({
+			id: user.id,
+			email: encodeURIComponent(emailAdd),
+			domain: config.domain,
+			token: jwt.sign({ email: emailAdd }, config.secret, {expiresIn: "2 days"})
+		});
+		
+		log.d("email add", user, emailAdd);
+		if (emailAdd) {
+			log.i("sending welcome email.", emailAdd);
+			send(config.from, emailAdd, "Welcome to Scrollback", emailHtml);
+		}
+	}
+
+	fs.readFile(__dirname + "/views/" + origin.host + ".hbs", "utf8", function(err, data) {
+		var template;
+		if (err) return useTemplate(defaultTemplate);
+		template = handlebars.compile(data.toString());
+		useTemplate(template);
+	});
+}
+
+
+/**
  * Listen to Room Event
  * @param coreObject
  */
-module.exports = function(coreObject) {
-	core = coreObject;
-	if (config.email && config.email.auth) {
-		init();
-		core.on('user',emailRoomListener , "gateway"); 
-	}
-	else {
-		log("email module is not enabled");
-	}
 
-};
-
-function emailRoomListener(action, callback){
-    log("user welcome email ", action);
-    if(!action.old.id) {//Signup
-        sendWelcomeEmail(action.user);
-    }
+function emailRoomListener(action, callback) {
+	log("user welcome email ", action);
+	if (userUtils.isGuest(action.from)) {
+		sendWelcomeEmail(action.user, action.origin);
+	}
+	
 	callback();
 }
 
 function init() {
-    //read welcome email jade
-    fs.readFile(__dirname + "/views/welcomeEmail.jade", "utf8", function(err, data) {
-        if(err) throw err;
-        welcomeEmailJade = jade.compile(data,  {basedir: __dirname + "/views/"});
-        log("welcome emails " , welcomeEmailJade );
-    });
+	fs.readFile(__dirname + "/views/welcome-email.hbs", "utf8", function(err, data) {
+		if (err) throw err;
+
+		defaultTemplate = handlebars.compile(data.toString());
+	});
 }
 
-/**
- *send welcome mail to user
- *@param {Object} user
- */
-function sendWelcomeEmail(user) {
-	var emailHtml = welcomeEmailJade(user);
-	var emailAdd = false;
-	user.identities.forEach(function (u) {
-		if (u.indexOf('mailto:') === 0) {
-			emailAdd = u.substring(7);
-		}
-	});
-	log("email add", user, emailAdd);
-	if (emailAdd) {
-		log("sending welcome email." , emailAdd);
-		send(emailConfig.from, emailAdd, "Welcome to Scrollback", emailHtml);
+module.exports = function(core, conf) {
+	config = conf;
+
+	if (config && config.auth) {
+		init();
+		send = send(config);
+		core.on("user", emailRoomListener, "gateway");
+	} else {
+		log("email module is not enabled");
 	}
-}
+};

@@ -1,13 +1,7 @@
 var nodemailer = require('nodemailer');
-var log = require("../lib/logger.js").tag("mail");
-var config = require('../config.js');
-var emailConfig = config.email;
-var transport = nodemailer.createTransport("SMTP", {
-    host: "email-smtp.us-east-1.amazonaws.com",
-    secureConnection: true,
-    port: 465,
-    auth: emailConfig && emailConfig.auth
-});
+var log = require("../lib/logger.js");
+var transport, emailConfig;
+
 function send(from,to,subject,html) {
 
     var email = {
@@ -20,12 +14,9 @@ function send(from,to,subject,html) {
         email.bcc = emailConfig.bcc;
     }
 
-    if (emailConfig.debug) {
-        log("sending email :", email);
-    }
-    transport.sendMail(email, function(error) {
+	transport.sendMail(email, function(error) {
         if(!error){
-            log('Text message sent successfully!');
+            log('Text message sent successfully!', email.to);
         }
         else{
             log("error in sending email: ",error, "retrying...");
@@ -36,4 +27,13 @@ function send(from,to,subject,html) {
     });
 }
 
-module.exports = send;
+module.exports = function(conf) {
+	emailConfig = conf;
+	transport = nodemailer.createTransport("SMTP", {
+		host: "email-smtp.us-east-1.amazonaws.com",
+		secureConnection: true,
+		port: 465,
+		auth: emailConfig && emailConfig.auth
+	});
+	return send;
+};
